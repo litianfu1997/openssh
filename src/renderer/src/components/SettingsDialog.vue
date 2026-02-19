@@ -15,7 +15,7 @@
         <div class="dialog-body">
           <!-- 版本信息 -->
           <div class="version-info">
-            <img src="../../assets/icon.png" alt="Logo" class="app-logo" />
+            <img :src="iconPath" alt="Logo" class="app-logo" />
             <div class="app-name">OpenSSH Client</div>
             <div class="app-version">v{{ appVersion }}</div>
           </div>
@@ -57,6 +57,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import iconPath from '@/assets/icon.png'
 
 const props = defineProps({
   visible: Boolean
