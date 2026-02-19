@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { autoUpdater } from 'electron-updater'
 import { createSSHConnection, closeSSHConnection, resizeSSHTerminal, getSshConnections } from './ssh-manager'
 import { getHosts, saveHost, deleteHost, getHost } from './db'
 
@@ -41,14 +42,79 @@ function createWindow() {
     return mainWindow
 }
 
+import { autoUpdater } from 'electron-updater'
+
+import { getAutoCheckUpdate, setAutoCheckUpdate } from './config'
+
+// 自动更新逻辑
+function checkForUpdates(mainWindow) {
+    // 自动触发时，需检查用户是否开启
+    if (getAutoCheckUpdate()) {
+        autoUpdater.checkForUpdatesAndNotify()
+    }
+
+    autoUpdater.on('checking-for-update', () => {
+        mainWindow.webContents.send('updater:status', 'checking')
+    })
+
+    // ... 其他 listener 保持不变 ...
+    autoUpdater.on('update-available', (info) => {
+        mainWindow.webContents.send('updater:status', 'available', info)
+    })
+
+    autoUpdater.on('update-not-available', () => {
+        mainWindow.webContents.send('updater:status', 'not-available')
+    })
+
+    autoUpdater.on('error', (err) => {
+        mainWindow.webContents.send('updater:status', 'error', err.message)
+    })
+
+    autoUpdater.on('download-progress', (progressObj) => {
+        mainWindow.webContents.send('updater:progress', progressObj)
+    })
+
+    autoUpdater.on('update-downloaded', (info) => {
+        mainWindow.webContents.send('updater:status', 'downloaded', info)
+    })
+
+    ipcMain.on('updater:install', () => {
+        autoUpdater.quitAndInstall()
+    })
+
+    // 手动检查更新（忽略配置开关）
+    ipcMain.handle('updater:check-manual', () => {
+        return autoUpdater.checkForUpdatesAndNotify()
+    })
+
+    // 获取自动更新开关状态
+    ipcMain.handle('updater:config-get', () => {
+        return getAutoCheckUpdate()
+    })
+
+    // 设置自动更新开关
+    ipcMain.handle('updater:config-set', (_, enabled) => {
+        setAutoCheckUpdate(enabled)
+        return true
+    })
+
+    // 获取版本号
+    ipcMain.handle('app:version', () => app.getVersion())
+}
+
 app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.openssh.client')
+
+    const mainWindow = createWindow()
+
+    // 初始化自动更新
+    if (!is.dev) {
+        checkForUpdates(mainWindow)
+    }
 
     app.on('browser-window-created', (_, window) => {
         optimizer.watchWindowShortcuts(window)
     })
-
-    const mainWindow = createWindow()
 
     // 窗口控制
     ipcMain.on('window:minimize', () => mainWindow.minimize())

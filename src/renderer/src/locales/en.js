@@ -61,4 +61,16 @@ export default {
         ctx_paste: 'Paste',
         ctx_clear: 'Clear',
     },
+    settings: {
+        title: 'Settings & About',
+        auto_update: 'Automatic Updates',
+        auto_update_desc: 'Download updates in background automatically',
+        check_update: 'Check for Updates',
+        checking: 'Checking...',
+        install_now: 'Restart & Install',
+        latest: 'You are on the latest version.',
+        new_version: '🎉 New version v{v} available!',
+        error: 'Update failed',
+        downloading: 'Downloading...',
+    }
 }

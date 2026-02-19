@@ -18,6 +18,7 @@
     },
     "dependencies": {
         "electron-store": "^8.2.0",
+        "electron-updater": "^6.8.3",
         "ssh2": "^1.16.0",
         "uuid": "^9.0.1",
         "vue-i18n": "^11.2.8"
@@ -46,6 +47,13 @@
             "node_modules/ssh2/**",
             "node_modules/cpu-features/**",
             "node_modules/nan/**"
+        ],
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "litianfu1997",
+                "repo": "openssh"
+            }
         ],
         "directories": {
             "output": "release"

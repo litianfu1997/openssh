@@ -1,7 +1,7 @@
 <template>
   <div class="app-layout">
     <!-- 自定义标题栏 -->
-    <TitleBar />
+    <TitleBar @open-settings="showSettingsDialog = true" />
 
     <div class="app-body">
       <!-- 左侧边栏：主机列表 -->
@@ -52,6 +52,11 @@
       @close="showHostDialog = false"
       @saved="onHostSaved"
     />
+
+    <SettingsDialog
+      v-if="showSettingsDialog"
+      v-model:visible="showSettingsDialog"
+    />
   </div>
 </template>
 
@@ -64,11 +69,13 @@ import TabBar from './components/TabBar.vue'
 import TerminalPane from './components/TerminalPane.vue'
 import WelcomeScreen from './components/WelcomeScreen.vue'
 import HostDialog from './components/HostDialog.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 
 const hosts = ref([])
-const sessions = ref([]) // { id, hostId, hostName, status, host }
+const sessions = ref([]) 
 const activeSessionId = ref(null)
 const showHostDialog = ref(false)
+const showSettingsDialog = ref(false)
 const editingHost = ref(null)
 
 async function loadHosts() {

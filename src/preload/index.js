@@ -25,5 +25,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         onData: (cb) => ipcRenderer.on('ssh:data', (_, payload) => cb(payload)),
         onClosed: (cb) => ipcRenderer.on('ssh:closed', (_, payload) => cb(payload)),
         removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+    },
+
+    // 自动更新
+    updater: {
+        checkManual: () => ipcRenderer.invoke('updater:check-manual'),
+        install: () => ipcRenderer.send('updater:install'),
+        getConfig: () => ipcRenderer.invoke('updater:config-get'),
+        setConfig: (enabled) => ipcRenderer.invoke('updater:config-set', enabled),
+        onStatus: (cb) => ipcRenderer.on('updater:status', (_, ...args) => cb(...args)),
+        onProgress: (cb) => ipcRenderer.on('updater:progress', (_, ...args) => cb(...args)),
+        getVersion: () => ipcRenderer.invoke('app:version')
     }
 })
