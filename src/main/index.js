@@ -33,6 +33,9 @@ function createWindow() {
         return { action: 'deny' }
     })
 
+    // 初始化自动更新
+    checkForUpdates(mainWindow)
+
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     } else {
@@ -46,10 +49,15 @@ function createWindow() {
 
 import { getAutoCheckUpdate, setAutoCheckUpdate } from './config'
 
+let updaterHandlersRegistered = false
+
 // 自动更新逻辑
 function checkForUpdates(mainWindow) {
+    if (updaterHandlersRegistered) return
+    updaterHandlersRegistered = true
+
     // 自动触发时，需检查用户是否开启
-    if (getAutoCheckUpdate()) {
+    if (!is.dev && getAutoCheckUpdate()) {
         autoUpdater.checkForUpdatesAndNotify()
     }
 
@@ -106,11 +114,6 @@ app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.openssh.client')
 
     const mainWindow = createWindow()
-
-    // 初始化自动更新
-    if (!is.dev) {
-        checkForUpdates(mainWindow)
-    }
 
     app.on('browser-window-created', (_, window) => {
         optimizer.watchWindowShortcuts(window)

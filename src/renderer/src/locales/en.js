@@ -66,11 +66,14 @@ export default {
         auto_update: 'Automatic Updates',
         auto_update_desc: 'Download updates in background automatically',
         check_update: 'Check for Updates',
-        checking: 'Checking...',
+        checking: 'Checking for updates',
         install_now: 'Restart & Install',
         latest: 'You are on the latest version.',
-        new_version: '🎉 New version v{v} available!',
+        new_version: '🎉 New version available',
+        update_available: 'New version available',
+        update_downloaded: 'Update ready to install',
+        update_error: 'Failed to check for updates',
         error: 'Update failed',
-        downloading: 'Downloading...',
+        downloading: 'Downloading update',
     }
 }

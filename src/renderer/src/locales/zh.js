@@ -66,11 +66,14 @@ export default {
         auto_update: '自动获取更新',
         auto_update_desc: '有新版本时自动下载并通知我',
         check_update: '检查更新',
-        checking: '正在连接服务器...',
+        checking: '正在检查更新',
         install_now: '立即重启并更新',
         latest: '当前已是最新版本',
-        new_version: '🎉 发现新版本 v{v}',
+        new_version: '🎉 发现新版本',
+        update_available: '发现新版本',
+        update_downloaded: '更新已完成，准备安装',
+        update_error: '检查更新失败',
         error: '更新出错',
-        downloading: '正在下载...',
+        downloading: '正在下载更新',
     }
 }

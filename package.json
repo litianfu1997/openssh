@@ -1,6 +1,6 @@
 {
     "name": "openssh-client",
-    "version": "0.1.1",
+    "version": "0.1.25",
     "description": "A lightweight and clean SSH client",
     "main": "out/main/index.js",
     "author": "openSSH",
@@ -10,7 +10,6 @@
         "build": "electron-vite build",
         "preview": "electron-vite preview",
         "package": "electron-vite build && electron-builder",
-        "create-ico": "node scripts/create-ico.js",
         "build:win": "npm run build && electron-builder --win",
         "build:mac": "npm run build && electron-builder --mac",
         "build:linux": "npm run build && electron-builder --linux",
@@ -87,7 +86,8 @@
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
             "createDesktopShortcut": true,
-            "createStartMenuShortcut": true
+            "createStartMenuShortcut": true,
+            "deleteAppDataOnUninstall": true
         },
         "mac": {
             "target": "dmg",
