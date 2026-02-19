@@ -74,12 +74,12 @@
             ],
             "icon": "resources/icon.ico"
         },
+        "compression": "maximum",
         "nsis": {
             "oneClick": false,
             "allowToChangeInstallationDirectory": true,
             "createDesktopShortcut": true,
-            "createStartMenuShortcut": true,
-            "compression": "maximum"
+            "createStartMenuShortcut": true
         },
         "mac": {
             "target": "dmg",
