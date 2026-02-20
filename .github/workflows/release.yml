@@ -76,7 +76,9 @@ jobs:
       - name: Upload Windows artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: |
+            release/*.exe
+            release/*.yml
 
   # ─────────────────────────────────────────────
   # 3. macOS 构建
@@ -112,6 +114,7 @@ jobs:
           files: |
             release/*.dmg
             release/*.zip
+            release/*.yml
 
   # ─────────────────────────────────────────────
   # 4. Linux 构建
@@ -144,4 +147,6 @@ jobs:
       - name: Upload Linux artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.AppImage
+          files: |
+            release/*.AppImage
+            release/*.yml

@@ -43,7 +43,11 @@ export default {
         placeholder_group: 'Default Group',
         placeholder_key: 'Paste PEM private key...',
         placeholder_passphrase: 'If key has paraphrase',
-        placeholder_desc: 'Optional notes'
+        placeholder_desc: 'Optional notes',
+        test_connection: 'Test Connection',
+        testing: 'Testing...',
+        test_success: 'Connection successful',
+        test_failed: 'Connection failed'
     },
     tab: {
         duplicate: 'Duplicate Session',

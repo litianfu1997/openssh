@@ -43,7 +43,11 @@ export default {
         placeholder_group: '默认分组',
         placeholder_key: '粘贴 PEM 格式私钥内容...',
         placeholder_passphrase: '如果私钥有密码请填写',
-        placeholder_desc: '可选备注信息'
+        placeholder_desc: '可选备注信息',
+        test_connection: '测试连接',
+        testing: '连接中...',
+        test_success: '连接成功',
+        test_failed: '连接失败'
     },
     tab: {
         duplicate: '复制会话',

@@ -87,3 +87,66 @@ export function resizeSSHTerminal(sessionId, cols, rows) {
         conn.stream.setWindow(rows, cols, 0, 0)
     }
 }
+
+/**
+ * 测试 SSH 连接（不打开 shell，连接成功立即断开）
+ * @param {object} hostConfig 主机配置对象
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export function testSSHConnection(hostConfig) {
+    return new Promise((resolve) => {
+        const client = new Client()
+        let settled = false
+
+        const timeout = setTimeout(() => {
+            if (!settled) {
+                settled = true
+                client.end()
+                resolve({ success: false, message: 'Connection timed out' })
+            }
+        }, 15000)
+
+        client.on('ready', () => {
+            if (!settled) {
+                settled = true
+                clearTimeout(timeout)
+                client.end()
+                resolve({ success: true, message: 'ok' })
+            }
+        })
+
+        client.on('error', (err) => {
+            if (!settled) {
+                settled = true
+                clearTimeout(timeout)
+                resolve({ success: false, message: err.message })
+            }
+        })
+
+        const connectConfig = {
+            host: hostConfig.host,
+            port: hostConfig.port || 22,
+            username: hostConfig.username,
+            readyTimeout: 15000
+        }
+
+        if (hostConfig.auth_type === 'password') {
+            connectConfig.password = hostConfig.password
+        } else if (hostConfig.auth_type === 'key') {
+            connectConfig.privateKey = hostConfig.private_key
+            if (hostConfig.passphrase) {
+                connectConfig.passphrase = hostConfig.passphrase
+            }
+        }
+
+        try {
+            client.connect(connectConfig)
+        } catch (e) {
+            if (!settled) {
+                settled = true
+                clearTimeout(timeout)
+                resolve({ success: false, message: e.message })
+            }
+        }
+    })
+}

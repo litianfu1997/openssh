@@ -103,6 +103,22 @@
             @click="handleDelete"
           >删除</button>
           <div style="flex:1" />
+          <!-- 测试连接状态 -->
+          <transition name="fade">
+            <span v-if="testStatus" class="test-badge" :class="testStatus">
+              <svg v-if="testStatus === 'testing'" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              <svg v-else-if="testStatus === 'success'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+              <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <span class="test-badge-text">{{ testMessage }}</span>
+            </span>
+          </transition>
+          <button
+            class="btn btn-test"
+            :disabled="!isValid || testStatus === 'testing'"
+            @click="handleTest"
+          >
+            {{ testStatus === 'testing' ? $t('dialog.testing') : $t('dialog.test_connection') }}
+          </button>
           <button class="btn btn-ghost" @click="$emit('close')">{{ $t('dialog.cancel') }}</button>
           <button class="btn btn-primary" :disabled="!isValid" @click="handleSave">
             {{ isEdit ? $t('dialog.save') : $t('dialog.title_add') }}
@@ -138,6 +154,10 @@ const form = ref({
   group_name: '', // 默认留空，显示 placeholder
   description: ''
 })
+
+// 测试连接状态: '' | 'testing' | 'success' | 'failed'
+const testStatus = ref('')
+const testMessage = ref('')
 
 const isEdit = computed(() => !!props.host?.id)
 
@@ -176,6 +196,9 @@ watch(() => props.host, (h) => {
       description: ''
     }
   }
+  // 切换主机时重置测试状态
+  testStatus.value = ''
+  testMessage.value = ''
 }, { immediate: true })
 
 async function handleSave() {
@@ -187,6 +210,38 @@ async function handleSave() {
   }
   await window.electronAPI.hosts.save(data)
   emit('saved')
+}
+
+async function handleTest() {
+  if (!isValid.value) return
+  testStatus.value = 'testing'
+  testMessage.value = t('dialog.testing')
+  try {
+    const result = await window.electronAPI.ssh.test({
+      host: form.value.host,
+      port: form.value.port || 22,
+      username: form.value.username,
+      auth_type: form.value.auth_type,
+      password: form.value.password,
+      private_key: form.value.private_key,
+      passphrase: form.value.passphrase
+    })
+    if (result && result.success) {
+      testStatus.value = 'success'
+      testMessage.value = t('dialog.test_success')
+    } else {
+      testStatus.value = 'failed'
+      testMessage.value = result?.message || t('dialog.test_failed')
+    }
+  } catch (e) {
+    testStatus.value = 'failed'
+    testMessage.value = e.message || t('dialog.test_failed')
+  }
+  // 5 秒后自动清除
+  setTimeout(() => {
+    testStatus.value = ''
+    testMessage.value = ''
+  }, 5000)
 }
 
 async function handleDelete() {
@@ -326,5 +381,82 @@ async function handleDelete() {
 .dialog-footer .btn {
   font-size: 12px;
   padding: 5px 12px;
+}
+
+/* 测试连接按钮 */
+.btn-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-3);
+  color: var(--color-text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font-sans);
+}
+.btn-test:hover:not(:disabled) {
+  background: var(--color-bg-4);
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+.btn-test:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 测试结果徽章 */
+.test-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.test-badge.testing {
+  background: rgba(99, 179, 237, 0.1);
+  border-color: rgba(99, 179, 237, 0.3);
+  color: #63b3ed;
+}
+.test-badge.success {
+  background: rgba(72, 187, 120, 0.12);
+  border-color: rgba(72, 187, 120, 0.35);
+  color: #48bb78;
+}
+.test-badge.failed {
+  background: rgba(252, 129, 74, 0.12);
+  border-color: rgba(252, 129, 74, 0.35);
+  color: #fc814a;
+}
+.test-badge-text {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 旋转动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* fade 过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

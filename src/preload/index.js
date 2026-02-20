@@ -24,7 +24,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         disconnect: (sessionId) => ipcRenderer.invoke('ssh:disconnect', sessionId),
         onData: (cb) => ipcRenderer.on('ssh:data', (_, payload) => cb(payload)),
         onClosed: (cb) => ipcRenderer.on('ssh:closed', (_, payload) => cb(payload)),
-        removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+        removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+        test: (hostConfig) => ipcRenderer.invoke('ssh:test', hostConfig)
     },
 
     // 自动更新
