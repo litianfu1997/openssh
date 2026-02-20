@@ -200,7 +200,9 @@ function createTerminal() {
 
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
-  terminal.loadAddon(new WebLinksAddon())
+  terminal.loadAddon(new WebLinksAddon((e, uri) => {
+    window.open(uri, '_blank')
+  }))
 
   terminal.open(termRef.value)
   fitAddon.fit()

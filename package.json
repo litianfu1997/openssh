@@ -1,6 +1,6 @@
 {
     "name": "openssh-client",
-    "version": "0.1.26",
+    "version": "0.1.27",
     "description": "A lightweight and clean SSH client",
     "main": "out/main/index.js",
     "author": "openSSH",
@@ -57,6 +57,7 @@
         "directories": {
             "output": "release"
         },
+        "artifactName": "${name}-${version}-${os}-${arch}.${ext}",
         "files": [
             "out/**",
             "!out/**/*.map",

@@ -36,8 +36,8 @@ jobs:
             ### 下载 / Downloads
             | 平台 | 文件 | 说明 |
             |------|------|------|
-            | Windows | `*-setup.exe` | Windows 安装包（NSIS） |
-            | macOS | `*.dmg` | macOS 磁盘映像 |
+            | Windows | `*-win-x64.exe` | Windows 安装包（NSIS） |
+            | macOS | `*-mac-*.dmg` | macOS 磁盘映像 |
             | Linux | `*.AppImage` | Linux 通用格式，免安装 |
 
             > 源码包由 GitHub 自动生成，见下方 **Assets** 中的 `Source code`。
@@ -78,6 +78,7 @@ jobs:
         with:
           files: |
             release/*.exe
+            release/*.exe.blockmap
             release/*.yml
 
   # ─────────────────────────────────────────────
@@ -113,7 +114,9 @@ jobs:
         with:
           files: |
             release/*.dmg
+            release/*.dmg.blockmap
             release/*.zip
+            release/*.zip.blockmap
             release/*.yml
 
   # ─────────────────────────────────────────────
