@@ -229,8 +229,14 @@ function createTerminal() {
     return true
   })
 
-  // 点击任意位置隐藏右键菜单
-  termRef.value?.addEventListener('click', hideCtxMenu)
+  // 点击任意位置隐藏右键菜单并保证终端重新获取焦点
+  termRef.value?.addEventListener('click', (e) => {
+    hideCtxMenu()
+    // 如果没有选中文本，则保证终端获取焦点
+    if (!terminal.hasSelection()) {
+      terminal.focus()
+    }
+  })
 
   // 用户输入转发给主进程
   terminal.onData((data) => {
@@ -244,7 +250,10 @@ function createTerminal() {
   // 自适应大小
   resizeObserver = new ResizeObserver(() => {
     if (props.visible) {
-      requestAnimationFrame(() => fitAddon.fit())
+      requestAnimationFrame(() => {
+        fitAddon.fit()
+        terminal.focus()
+      })
     }
   })
   resizeObserver.observe(termRef.value)
@@ -282,7 +291,10 @@ async function connect() {
   try {
     await window.electronAPI.ssh.connect(props.session.id, props.session.hostId)
     props.session.status = 'connected'
-    fitAddon?.fit()
+    requestAnimationFrame(() => {
+      fitAddon?.fit()
+      terminal?.focus()
+    })
     const { cols, rows } = terminal
     window.electronAPI.ssh.resize(props.session.id, cols, rows)
   } catch (err) {
@@ -298,13 +310,16 @@ async function retry() {
 
 watch(() => props.visible, (v) => {
   if (v) {
-    requestAnimationFrame(() => fitAddon?.fit())
-    terminal?.focus()
+    requestAnimationFrame(() => {
+      fitAddon?.fit()
+      terminal?.focus()
+    })
   }
 })
 
 onMounted(async () => {
   createTerminal()
+  terminal?.focus()
   await connect()
 })
 
