@@ -1,5 +1,6 @@
 import { Client } from 'ssh2'
 import { updateLastConnected } from './db'
+import { posix } from 'path'
 
 // sessionId -> { client, stream, sftp }
 const sshConnections = new Map()
@@ -93,17 +94,37 @@ export async function uploadFile(sessionId, localPath, remotePath, onProgress) {
         const readStream = fs.createReadStream(localPath)
         const writeStream = sftp.createWriteStream(remotePath)
 
-        readStream.on('error', reject)
-        writeStream.on('error', reject)
+        const cleanup = () => {
+            readStream.destroy()
+            writeStream.destroy()
+        }
+
+        readStream.on('error', (err) => {
+            cleanup()
+            reject(err)
+        })
+        writeStream.on('error', (err) => {
+            cleanup()
+            reject(err)
+        })
 
         if (onProgress) {
-            const stats = fs.statSync(localPath)
-            const totalBytes = stats.size
-            let bytesTransferred = 0
+            // Use async file stats instead of sync
+            fs.promises.stat(localPath).then((stats) => {
+                const totalBytes = stats.size
+                let bytesTransferred = 0
 
-            readStream.on('data', (chunk) => {
-                bytesTransferred += chunk.length
-                onProgress(bytesTransferred, totalBytes)
+                readStream.on('data', (chunk) => {
+                    bytesTransferred += chunk.length
+                    try {
+                        onProgress(bytesTransferred, totalBytes)
+                    } catch (error) {
+                        // Prevent callback crashes from affecting the upload
+                        console.error('Progress callback error:', error)
+                    }
+                })
+            }).catch(() => {
+                // If stats fail, continue without progress tracking
             })
         }
 
@@ -135,13 +156,29 @@ export async function downloadFile(sessionId, remotePath, localPath, onProgress)
             const readStream = sftp.createReadStream(remotePath)
             const writeStream = fs.createWriteStream(localPath)
 
-            readStream.on('error', reject)
-            writeStream.on('error', reject)
+            const cleanup = () => {
+                readStream.destroy()
+                writeStream.destroy()
+            }
+
+            readStream.on('error', (err) => {
+                cleanup()
+                reject(err)
+            })
+            writeStream.on('error', (err) => {
+                cleanup()
+                reject(err)
+            })
 
             if (onProgress) {
                 readStream.on('data', (chunk) => {
                     bytesTransferred += chunk.length
-                    onProgress(bytesTransferred, totalBytes)
+                    try {
+                        onProgress(bytesTransferred, totalBytes)
+                    } catch (error) {
+                        // Prevent callback crashes from affecting the download
+                        console.error('Progress callback error:', error)
+                    }
                 })
             }
 
@@ -185,7 +222,8 @@ export async function deleteDirectoryRecursive(sessionId, dirPath) {
                 for (const item of list) {
                     if (item.filename === '.' || item.filename === '..') continue
 
-                    const fullPath = `${dirPath}/${item.filename}`
+                    // Use path.posix.join for consistent path handling
+                    const fullPath = posix.join(dirPath, item.filename)
 
                     if (item.attrs.isDirectory()) {
                         await deleteDirectoryRecursive(sessionId, fullPath)
@@ -264,9 +302,20 @@ export async function movePath(sessionId, oldPath, newPath) {
 export async function readFile(sessionId, path) {
     const sftp = await getSFTP(sessionId)
     return new Promise((resolve, reject) => {
-        sftp.readFile(path, (err, data) => {
+        // First check file size to prevent loading huge files
+        sftp.stat(path, (err, stats) => {
             if (err) return reject(err)
-            resolve(data)
+
+            const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+            if (stats.size > MAX_FILE_SIZE) {
+                return reject(new Error(`File too large (${Math.round(stats.size / 1024 / 1024)}MB). Maximum size is 10MB.`))
+            }
+
+            // File size is acceptable, proceed to read
+            sftp.readFile(path, (err, data) => {
+                if (err) return reject(err)
+                resolve(data)
+            })
         })
     })
 }
@@ -332,7 +381,8 @@ export async function getDirectoryTree(sessionId, rootPath, depth = 1) {
                     for (const item of list) {
                         if (item.filename === '.' || item.filename === '..') continue
 
-                        const fullPath = `${path}/${item.filename}`
+                        // Use path.posix.join for consistent path handling
+                        const fullPath = posix.join(path, item.filename)
                         const isDirectory = item.attrs.isDirectory()
 
                         const treeNode = {
