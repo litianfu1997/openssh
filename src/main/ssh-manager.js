@@ -1,11 +1,80 @@
 import { Client } from 'ssh2'
 import { updateLastConnected } from './db'
 
-// sessionId -> { client, stream }
+// sessionId -> { client, stream, sftp }
 const sshConnections = new Map()
 
 export function getSshConnections() {
     return sshConnections
+}
+
+/**
+ * 构建 SSH 连接配置
+ * @param {object} hostConfig 主机配置
+ * @param {object} options 额外选项
+ * @returns {object} SSH 连接配置
+ */
+function buildConnectConfig(hostConfig, options = {}) {
+    const config = {
+        host: hostConfig.host,
+        port: hostConfig.port || 22,
+        username: hostConfig.username,
+        readyTimeout: options.readyTimeout || 20000,
+        ...options
+    }
+
+    if (hostConfig.auth_type === 'password') {
+        config.password = hostConfig.password
+    } else if (hostConfig.auth_type === 'key') {
+        config.privateKey = hostConfig.private_key
+        if (hostConfig.passphrase) {
+            config.passphrase = hostConfig.passphrase
+        }
+    }
+
+    return config
+}
+
+/**
+ * 获取或初始化 SFTP 会话
+ * @param {string} sessionId 
+ * @returns {Promise<Object>} sftp 对象
+ */
+export function getSFTP(sessionId) {
+    return new Promise((resolve, reject) => {
+        const conn = sshConnections.get(sessionId)
+        if (!conn) return reject(new Error('SSH 连接不存在'))
+        
+        if (conn.sftp) return resolve(conn.sftp)
+
+        conn.client.sftp((err, sftp) => {
+            if (err) return reject(err)
+            conn.sftp = sftp
+            resolve(sftp)
+        })
+    })
+}
+
+/**
+ * 列出远程目录
+ * @param {string} sessionId
+ * @param {string} remotePath
+ */
+export async function listRemoteDirectory(sessionId, remotePath) {
+    const sftp = await getSFTP(sessionId)
+    return new Promise((resolve, reject) => {
+        sftp.readdir(remotePath, (err, list) => {
+            if (err) return reject(err)
+            resolve(list.map(item => ({
+                name: item.filename,
+                size: item.attrs.size,
+                type: item.attrs.isDirectory ? 'directory' : 'file',
+                mode: item.attrs.mode,
+                mtime: item.attrs.mtime * 1000,
+                atime: item.attrs.atime * 1000
+            })))
+        })
+    })
 }
 
 export async function createSSHConnection(mainWindow, sessionId, host) {
@@ -50,25 +119,7 @@ export async function createSSHConnection(mainWindow, sessionId, host) {
             mainWindow.webContents.send('ssh:closed', { sessionId })
         })
 
-        // 构建连接配置
-        const connectConfig = {
-            host: host.host,
-            port: host.port || 22,
-            username: host.username,
-            readyTimeout: 20000,
-            keepaliveInterval: 30000
-        }
-
-        if (host.auth_type === 'password') {
-            connectConfig.password = host.password
-        } else if (host.auth_type === 'key') {
-            connectConfig.privateKey = host.private_key
-            if (host.passphrase) {
-                connectConfig.passphrase = host.passphrase
-            }
-        }
-
-        client.connect(connectConfig)
+        client.connect(buildConnectConfig(host, { keepaliveInterval: 30000 }))
     })
 }
 
@@ -123,24 +174,8 @@ export function testSSHConnection(hostConfig) {
             }
         })
 
-        const connectConfig = {
-            host: hostConfig.host,
-            port: hostConfig.port || 22,
-            username: hostConfig.username,
-            readyTimeout: 15000
-        }
-
-        if (hostConfig.auth_type === 'password') {
-            connectConfig.password = hostConfig.password
-        } else if (hostConfig.auth_type === 'key') {
-            connectConfig.privateKey = hostConfig.private_key
-            if (hostConfig.passphrase) {
-                connectConfig.passphrase = hostConfig.passphrase
-            }
-        }
-
         try {
-            client.connect(connectConfig)
+            client.connect(buildConnectConfig(hostConfig, { readyTimeout: 15000 }))
         } catch (e) {
             if (!settled) {
                 settled = true
