@@ -1,6 +1,6 @@
 {
     "name": "openssh-client",
-    "version": "0.2.1",
+    "version": "v0.2.1",
     "description": "A lightweight and clean SSH client",
     "main": "out/main/index.js",
     "author": "openSSH",
