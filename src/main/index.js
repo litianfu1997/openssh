@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, nativeTheme } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
-import { createSSHConnection, closeSSHConnection, resizeSSHTerminal, getSshConnections, testSSHConnection } from './ssh-manager'
+import { createSSHConnection, closeSSHConnection, resizeSSHTerminal, getSshConnections, testSSHConnection, listRemoteDirectory } from './ssh-manager'
 import { getHosts, saveHost, deleteHost, getHost } from './db'
 
 function createWindow() {
@@ -165,6 +165,11 @@ app.whenReady().then(() => {
     // SSH 测试连接 IPC
     ipcMain.handle('ssh:test', async (_, hostConfig) => {
         return testSSHConnection(hostConfig)
+    })
+
+    // SFTP IPC
+    ipcMain.handle('sftp:ls', async (_, { sessionId, path }) => {
+        return listRemoteDirectory(sessionId, path)
     })
 
     app.on('activate', function () {

@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         test: (hostConfig) => ipcRenderer.invoke('ssh:test', hostConfig)
     },
 
+    // SFTP 操作
+    sftp: {
+        ls: (sessionId, path) => ipcRenderer.invoke('sftp:ls', { sessionId, path })
+    },
+
     // 自动更新
     updater: {
         checkManual: () => ipcRenderer.invoke('updater:check-manual'),

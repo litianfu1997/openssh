@@ -83,6 +83,7 @@ let resizeObserver = null
 let dataListener = null
 let closedListener = null
 let themeObserver = null
+let clickHandler = null
 
 // 右键菜单状态
 const ctxMenu = ref({ show: false, x: 0, y: 0 })
@@ -230,13 +231,14 @@ function createTerminal() {
   })
 
   // 点击任意位置隐藏右键菜单并保证终端重新获取焦点
-  termRef.value?.addEventListener('click', (e) => {
+  clickHandler = () => {
     hideCtxMenu()
     // 如果没有选中文本，则保证终端获取焦点
     if (!terminal.hasSelection()) {
       terminal.focus()
     }
-  })
+  }
+  termRef.value?.addEventListener('click', clickHandler)
 
   // 用户输入转发给主进程
   terminal.onData((data) => {
@@ -326,6 +328,11 @@ onMounted(async () => {
 onUnmounted(() => {
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
+  if (termRef.value && clickHandler) {
+    termRef.value.removeEventListener('click', clickHandler)
+  }
+  window.electronAPI.ssh.removeAllListeners('ssh:data')
+  window.electronAPI.ssh.removeAllListeners('ssh:closed')
   terminal?.dispose()
   window.electronAPI.ssh.disconnect(props.session.id)
 })
