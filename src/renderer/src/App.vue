@@ -9,6 +9,7 @@
         :hosts="hosts"
         :active-session-id="activeSessionId"
         @connect="handleConnect"
+        @open-sftp="createSftpTab"
         @manage-host="openHostDialog"
         @refresh="loadHosts"
       />
@@ -38,7 +39,13 @@
               v-for="session in sessions"
               :key="session.id"
               :session="session"
-              :visible="session.id === activeSessionId"
+              :visible="session.id === activeSessionId && session.type === TAB_TYPES.TERMINAL"
+            />
+            <SftpPane
+              v-for="session in sessions"
+              :key="session.id"
+              :session="session"
+              v-show="session.id === activeSessionId && session.type === TAB_TYPES.SFTP"
             />
           </div>
         </template>
@@ -67,9 +74,16 @@ import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
 import TabBar from './components/TabBar.vue'
 import TerminalPane from './components/TerminalPane.vue'
+import SftpPane from './components/SftpPane.vue'
 import WelcomeScreen from './components/WelcomeScreen.vue'
 import HostDialog from './components/HostDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+
+// 标签类型
+const TAB_TYPES = {
+  TERMINAL: 'terminal',
+  SFTP: 'sftp'
+}
 
 const hosts = ref([])
 const sessions = ref([]) 
@@ -96,8 +110,23 @@ async function handleConnect(host) {
   const sessionId = uuidv4()
   sessions.value.push({
     id: sessionId,
+    type: TAB_TYPES.TERMINAL,
     hostId: host.id,
     hostName: host.name,
+    host: `${host.username}@${host.host}:${host.port}`,
+    status: 'connecting'
+  })
+  activeSessionId.value = sessionId
+}
+
+// 创建 SFTP 标签
+async function createSftpTab(host) {
+  const sessionId = uuidv4()
+  sessions.value.push({
+    id: sessionId,
+    type: TAB_TYPES.SFTP,
+    hostId: host.id,
+    hostName: `${host.name} SFTP`,
     host: `${host.username}@${host.host}:${host.port}`,
     status: 'connecting'
   })
