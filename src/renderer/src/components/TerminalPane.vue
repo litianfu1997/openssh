@@ -252,6 +252,15 @@ function createTerminal() {
     window.electronAPI.ssh.input(props.session.id, data)
   })
 
+  // 捕获终端标题，尝试提取当前路径 (Linux bash 默认标题: user@host: ~/path)
+  terminal.onTitleChange((title) => {
+    const parts = title.split(':')
+    if (parts.length >= 2) {
+      const maybePath = parts.slice(1).join(':').trim()
+      props.session.cwd = maybePath
+    }
+  })
+
   terminal.onResize(({ cols, rows }) => {
     window.electronAPI.ssh.resize(props.session.id, cols, rows)
   })
@@ -363,13 +372,32 @@ onUnmounted(() => {
 .xterm-container {
   flex: 1;
   overflow: hidden;
-  padding: 4px;
+  /* 上下左留一点边距，右侧 0 确保滚动条紧贴屏幕边缘 */
+  padding: 4px 0 4px 4px;
 }
 
 /* 覆盖 xterm 默认样式 */
 :deep(.xterm) { height: 100%; }
-:deep(.xterm-viewport) { background: transparent !important; }
-:deep(.xterm-screen) { width: 100% !important; }
+:deep(.xterm-viewport) { 
+  background: transparent !important; 
+  cursor: default !important; /* 让滚动条不显示为编辑光标 */
+  z-index: 10; /* 置于顶层避免被 screen 遮挡 */
+}
+/* 给 Terminal 独立放宽一点滚动条方便拖拉 */
+:deep(.xterm-viewport::-webkit-scrollbar) {
+  width: 12px;
+}
+:deep(.xterm-viewport::-webkit-scrollbar-thumb) {
+  background: var(--color-text-3);
+  border: 3px solid var(--color-bg);
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+:deep(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
+  background: var(--color-text-2);
+  border: 3px solid var(--color-bg);
+  background-clip: padding-box;
+}
 
 .connecting-overlay, .error-overlay {
   position: absolute;

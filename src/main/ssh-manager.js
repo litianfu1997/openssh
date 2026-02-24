@@ -60,6 +60,21 @@ export function getSFTP(sessionId) {
 }
 
 /**
+ * 获取绝对路径
+ * @param {string} sessionId 
+ * @param {string} path 
+ */
+export async function getRealPath(sessionId, path) {
+    const sftp = await getSFTP(sessionId)
+    return new Promise((resolve, reject) => {
+        sftp.realpath(path, (err, target) => {
+            if (err) return reject(err)
+            resolve(target)
+        })
+    })
+}
+
+/**
  * 列出远程目录
  * @param {string} sessionId
  * @param {string} remotePath

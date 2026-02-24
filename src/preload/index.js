@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // SFTP 操作
     sftp: {
+        realpath: (sessionId, path) => ipcRenderer.invoke('sftp:realpath', { sessionId, path }),
         ls: (sessionId, path) => ipcRenderer.invoke('sftp:ls', { sessionId, path }),
         upload: (sessionId, transferId, localPath, remotePath) => ipcRenderer.invoke('sftp:upload', { sessionId, transferId, localPath, remotePath }),
         download: (sessionId, transferId, remotePath, localPath) => ipcRenderer.invoke('sftp:download', { sessionId, transferId, remotePath, localPath }),

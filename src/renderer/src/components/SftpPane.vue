@@ -18,6 +18,7 @@ const props = defineProps({
 
 // 状态
 const currentPath = ref('.')
+const absoluteHomePath = ref('/')
 const fileList = ref([])
 const treeData = ref([])
 const selectedFiles = ref([])
@@ -51,12 +52,31 @@ const loadDirectory = async (path) => {
 const loadTree = async () => {
   isTreeLoading.value = true
   try {
-    const result = await window.electronAPI.sftp.tree(props.session.id, '.', 1)
+    const rootPath = absoluteHomePath.value === '/' && currentPath.value === '.' ? '.' : absoluteHomePath.value
+    const result = await window.electronAPI.sftp.tree(props.session.id, rootPath, 1)
     treeData.value = result
   } catch (error) {
     console.error('Failed to load tree:', error)
   } finally {
     isTreeLoading.value = false
+  }
+}
+
+const handleLoadChildren = async (node) => {
+  if (node.children && node.children.length > 0) return
+  if (node.type !== 'directory') return
+  
+  node.isLoading = true
+  try {
+    const result = await window.electronAPI.sftp.ls(props.session.id, node.path)
+    node.children = result.filter(f => f.name !== '.' && f.name !== '..').map(f => ({
+      ...f,
+      path: node.path === '/' ? `/${f.name}` : `${node.path}/${f.name}`,
+    }))
+  } catch (error) {
+    console.error('Failed to load sub-directory:', error)
+  } finally {
+    node.isLoading = false
   }
 }
 
@@ -75,7 +95,7 @@ const handleFilesSelect = (files) => {
 
 const handleFileDblClick = async (file) => {
   if (file.type === 'directory') {
-    const newPath = currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`
+    const newPath = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
     await loadDirectory(newPath)
     selectedFiles.value = []
   } else {
@@ -100,7 +120,7 @@ const handleUpload = async () => {
   if (!result.canceled && result.filePaths.length > 0) {
     for (const localPath of result.filePaths) {
       const fileName = localPath.split(/[/\\]/).pop()
-      const remotePath = currentPath.value === '.' ? `./${fileName}` : `${currentPath.value}/${fileName}`
+      const remotePath = currentPath.value === '/' ? `/${fileName}` : (currentPath.value === '.' ? `./${fileName}` : `${currentPath.value}/${fileName}`)
 
       const transferId = Date.now().toString() + Math.random().toString().slice(2)
       transfers.value.push({
@@ -150,7 +170,7 @@ const handleDownload = async () => {
       })
 
       try {
-        const remotePath = currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`
+        const remotePath = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
         await window.electronAPI.sftp.download(props.session.id, transferId, remotePath, result.filePath)
       } catch (error) {
         if (error.message && error.message.includes('Cancelled')) {
@@ -174,7 +194,7 @@ const handleDelete = async (files) => {
 
   for (const file of targets) {
     try {
-      const path = currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`
+      const path = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
       await window.electronAPI.sftp.delete(props.session.id, path)
     } catch (error) {
       console.error('Delete failed:', error)
@@ -189,7 +209,7 @@ const handleMkdir = async () => {
   if (!name) return
 
   try {
-    const path = currentPath.value === '.' ? name : `${currentPath.value}/${name}`
+    const path = currentPath.value === '/' ? `/${name}` : (currentPath.value === '.' ? name : `${currentPath.value}/${name}`)
     await window.electronAPI.sftp.mkdir(props.session.id, path)
     refresh()
   } catch (error) {
@@ -207,18 +227,58 @@ const handleTogglePreview = () => {
   }
 }
 
+const getBookmarksKey = () => `sftp-bookmarks-${props.session.hostId}`
+
+const loadBookmarks = () => {
+  try {
+    const saved = localStorage.getItem(getBookmarksKey())
+    if (saved) bookmarks.value = JSON.parse(saved)
+  } catch (e) {
+    console.error('Failed to load bookmarks', e)
+  }
+}
+
+const saveBookmarks = () => {
+  localStorage.setItem(getBookmarksKey(), JSON.stringify(bookmarks.value))
+}
+
 const handleAddBookmark = () => {
+  const existing = bookmarks.value.find(b => b.path === currentPath.value)
+  if (existing) {
+    showToast('当前路径已在收藏中', 'info')
+    return
+  }
+  
+  const defaultName = currentPath.value.split('/').pop() || '/'
+  
   bookmarks.value.push({
-    name: currentPath.value.split('/').pop() || '/',
+    name: defaultName,
     path: currentPath.value
   })
+  saveBookmarks()
+  showToast('添至收藏成功', 'success')
 }
+
+const handleRemoveBookmark = (path) => {
+  bookmarks.value = bookmarks.value.filter(b => b.path !== path)
+  saveBookmarks()
+}
+
+const handleEditBookmark = ({ path, name }) => {
+  const bk = bookmarks.value.find(b => b.path === path)
+  if(!bk) return
+  if(name && name.trim() !== '') {
+    bk.name = name.trim()
+    saveBookmarks()
+  }
+}
+
 const handleRename = async (file) => {
   const oldName = file.name
   const newName = prompt('请输入新名称:', oldName)
   if (!newName || newName === oldName) return
-  const oldPath = currentPath.value === '.' ? oldName : `${currentPath.value}/${oldName}`
-  const newPath = currentPath.value === '.' ? newName : `${currentPath.value}/${newName}`
+  const oldPath = currentPath.value === '/' ? `/${oldName}` : (currentPath.value === '.' ? oldName : `${currentPath.value}/${oldName}`)
+  const newPath = currentPath.value === '/' ? `/${newName}` : (currentPath.value === '.' ? newName : `${currentPath.value}/${newName}`)
   try {
     await window.electronAPI.sftp.rename(props.session.id, oldPath, newPath)
     refresh()
@@ -286,12 +346,36 @@ const loadInitialData = async () => {
       return
     }
   }
-  loadDirectory('.')
+
+  try {
+    // 获取家目录路径，作为所有相对路径的参考和树状图根目录
+    const homeAbs = await window.electronAPI.sftp.realpath(props.session.id, '.')
+    if (homeAbs) absoluteHomePath.value = homeAbs
+
+    // 如果初始化传入了cwd（通过终端右键在当前路径打开）
+    let targetPath = props.session.initialCwd || '.'
+    if (targetPath.startsWith('~')) {
+      targetPath = targetPath.replace(/^~/, homeAbs || '.')
+    }
+    
+    // 解析最终要进入的目录绝对路径
+    const absPath = await window.electronAPI.sftp.realpath(props.session.id, targetPath)
+    if (absPath) {
+      currentPath.value = absPath
+    } else {
+      currentPath.value = targetPath
+    }
+  } catch (e) {
+    console.error('Failed to resolve paths', e)
+  }
+
+  loadDirectory(currentPath.value)
   loadTree()
 }
 
 // 生命周期
 onMounted(() => {
+  loadBookmarks()
   loadInitialData()
   
   window.electronAPI.sftp.onUploadProgress(({ sessionId, remotePath, bytesTransferred, totalBytes, speed }) => {
@@ -326,6 +410,8 @@ onUnmounted(() => {
   <div class="sftp-pane">
     <SftpToolbar
       :selected-count="selectedCount"
+      :bookmarks="bookmarks"
+      :current-path="currentPath"
       @upload="handleUpload"
       @download="handleDownload"
       @delete="handleDelete"
@@ -333,6 +419,9 @@ onUnmounted(() => {
       @refresh="refresh"
       @toggle-preview="handleTogglePreview"
       @add-bookmark="handleAddBookmark"
+      @remove-bookmark="handleRemoveBookmark"
+      @edit-bookmark="handleEditBookmark"
+      @navigate="handleTreeNavigate"
     />
 
     <div class="sftp-main">
@@ -341,6 +430,7 @@ onUnmounted(() => {
         :current-path="currentPath"
         :loading="isTreeLoading"
         @navigate="handleTreeNavigate"
+        @load-children="handleLoadChildren"
       />
 
       <div class="sftp-content">
@@ -402,6 +492,18 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  
+  /* Map internal component variables to global theme variables */
+  --bg-color: var(--color-bg);
+  --bg-secondary: var(--color-bg-2);
+  --border-color: var(--color-border);
+  --text-color: var(--color-text);
+  --text-secondary: var(--color-text-2);
+  --hover-bg: var(--color-bg-4);
+  --selection-bg: var(--color-primary-light);
+  --selection-text: var(--color-primary-dark);
+  --accent-color: var(--color-primary);
+  
   background: var(--bg-color);
   color: var(--text-color);
 }

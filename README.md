@@ -12,7 +12,7 @@
 [![Electron](https://img.shields.io/badge/Electron-29-47848f?logo=electron)](https://www.electronjs.org/)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vue.js)](https://vuejs.org/)
 
-[English](#english) · [中文](#中文)
+[English](#english) · [中文](#zh)
 
 </div>
 
@@ -47,9 +47,13 @@
 #### 📁 SFTP File Browser
 - **Dual-Pane Layout** — intuitive directory tree and file list view
 - **File Management** — create, delete, rename, and move files/folders
+- **Bookmarks & Favorites** — instantly pin directories with custom aliases, complete with an inline search function to easily navigate your saved paths
 - **Upload & Download** — easily transfer files between local and remote hosts
 - **Transfer Queue** — monitor progress, speed, and support for pause/resume/cancel
 - **Drag & Drop** — drag files directly into the pane to upload
+
+#### 🔗 Seamless Integration
+- **Terminal to SFTP** — open the current working directory of your terminal directly into a new SFTP tab with a single right-click on the tab header
 
 #### 🌐 Internationalization (i18n)
 - Switch between **English** and **Chinese (简体中文)** at runtime
@@ -136,9 +140,14 @@ openssh-client/
 
 ### 📸 Screenshots
 
-| Welcome Screen | Add Host | Terminal Session |
-|:-:|:-:|:-:|
-| ![Welcome](./docs/screenshots/welcome.png) | ![Add Host](./docs/screenshots/add-host.png) | ![Terminal](./docs/screenshots/terminal.png) |
+#### Welcome Screen
+![Welcome](./docs/screenshots/welcome.png)
+
+#### Add Host
+![Add Host](./docs/screenshots/add-host.png)
+
+#### Terminal Session
+![Terminal](./docs/screenshots/terminal.png)
 
 ---
 
@@ -148,6 +157,8 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 ---
+
+<div id="zh"></div>
 
 ## 中文
 
@@ -178,9 +189,13 @@ This project is licensed under the [MIT License](LICENSE).
 #### 📁 SFTP 文件浏览器
 - **双面板布局** — 直观的左侧目录树与右侧文件列表
 - **文件管理** — 支持新建、删除、重命名、移动文件或文件夹
+- **路径收藏系统** — 一键收藏常用目录并支持自定义备注，内置快捷下拉菜单与独立搜索框，一秒找回深层路径
 - **文件传输** — 轻松实现本地与远程主机间的文件上传与下载
 - **传输队列** — 实时显示传输进度、速度，并支持暂停、恢复与取消
 - **拖拽上传** — 支持直接拖拽本地文件到窗口进行上传
+
+#### 🔗 无缝互通
+- **终端转 SFTP** — 终端使用过程中，只需右键点击上方标签页，即可在当前所处路径瞬间打开一个新的 SFTP 可视化面板
 
 #### 🌐 国际化 (i18n)
 - 运行时切换 **中文（简体）** 与 **English**
@@ -267,9 +282,14 @@ openssh-client/
 
 ### 📸 应用截图
 
-| 欢迎页 | 添加主机 | 终端会话 |
-|:-:|:-:|:-:|
-| ![欢迎页](./docs/screenshots/welcome.png) | ![添加主机](./docs/screenshots/add-host.png) | ![终端](./docs/screenshots/terminal.png) |
+#### 欢迎页
+![欢迎页](./docs/screenshots/welcome.png)
+
+#### 添加主机
+![添加主机](./docs/screenshots/add-host.png)
+
+#### 终端会话
+![终端](./docs/screenshots/terminal.png)
 
 ---
 

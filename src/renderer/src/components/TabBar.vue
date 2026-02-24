@@ -57,6 +57,18 @@
         :style="{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }"
         @mouseleave="ctxMenu.show = false"
       >
+        <button 
+          v-if="ctxMenu.session?.type === 'terminal' && ctxMenu.session?.cwd" 
+          class="ctx-item" 
+          @click="handleOpenSftpCwd"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 12l-7.5-7.5 1.5-1.5 9 9-9 9-1.5-1.5L20 12z"/>
+            <path d="M4 12h16"/>
+          </svg>
+          在此路径打开 SFTP
+        </button>
+        <div v-if="ctxMenu.session?.type === 'terminal' && ctxMenu.session?.cwd" class="ctx-divider" />
         <button class="ctx-item" @click="handleRename">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -97,7 +109,7 @@ const props = defineProps({
   activeId: { type: String, default: null }
 })
 
-const emit = defineEmits(['activate', 'close', 'duplicate', 'close-others', 'rename'])
+const emit = defineEmits(['activate', 'close', 'duplicate', 'close-others', 'rename', 'open-sftp-cwd'])
 
 // ===== 右键菜单 =====
 const ctxMenu = ref({ show: false, x: 0, y: 0, session: null })
@@ -112,6 +124,12 @@ function handleDuplicate() {
   const s = ctxMenu.value.session
   ctxMenu.value.show = false
   if (s) emit('duplicate', s)
+}
+
+function handleOpenSftpCwd() {
+  const s = ctxMenu.value.session
+  ctxMenu.value.show = false
+  if (s) emit('open-sftp-cwd', s)
 }
 
 function handleClose() {

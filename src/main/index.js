@@ -24,7 +24,8 @@ import {
     getDirectoryTree,
     pauseTransfer,
     resumeTransfer,
-    cancelTransfer
+    cancelTransfer,
+    getRealPath
 } from './ssh-manager'
 import { getHosts, saveHost, deleteHost, getHost } from './db'
 
@@ -191,6 +192,10 @@ app.whenReady().then(() => {
     })
 
     // SFTP IPC
+    ipcMain.handle('sftp:realpath', async (_, { sessionId, path }) => {
+        return getRealPath(sessionId, path)
+    })
+
     ipcMain.handle('sftp:ls', async (_, { sessionId, path }) => {
         return listRemoteDirectory(sessionId, path)
     })

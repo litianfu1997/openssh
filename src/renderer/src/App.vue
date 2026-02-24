@@ -34,6 +34,7 @@
             @duplicate="duplicateSession"
             @close-others="closeOtherSessions"
             @rename="renameSession"
+            @open-sftp-cwd="handleOpenSftpCwd"
           />
 
           <div class="terminals-wrap">
@@ -151,6 +152,24 @@ async function createSftpTab(host) {
     hostName: `${host.name} SFTP`,
     host: `${host.username}@${host.host}:${host.port}`,
     status: 'connecting'
+  })
+  activeSessionId.value = sessionId
+}
+
+// 在指定路径打开 SFTP
+async function handleOpenSftpCwd(session) {
+  const host = hosts.value.find(h => h.id === session.hostId)
+  if (!host) return
+  
+  const sessionId = uuidv4()
+  sessions.value.push({
+    id: sessionId,
+    type: TAB_TYPES.SFTP,
+    hostId: host.id,
+    hostName: `${host.name} SFTP`,
+    host: `${host.username}@${host.host}:${host.port}`,
+    status: 'connecting',
+    initialCwd: session.cwd
   })
   activeSessionId.value = sessionId
 }
