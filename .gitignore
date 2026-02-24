@@ -40,3 +40,4 @@ desktop.ini
 # ===== Temp =====
 *.tmp
 *.temp
+.agents/*
