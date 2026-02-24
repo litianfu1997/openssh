@@ -120,6 +120,8 @@ export default {
         resume: 'Resume',
         cancel: 'Cancel',
         uploading: 'Upload ↑',
-        downloading: 'Download ↓'
+        downloading: 'Download ↓',
+        preview: 'Preview',
+        edit_file: 'Edit File'
     }
 }

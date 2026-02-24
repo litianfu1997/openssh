@@ -120,6 +120,8 @@ export default {
         resume: '继续',
         cancel: '取消',
         uploading: '上传 ↑',
-        downloading: '下载 ↓'
+        downloading: '下载 ↓',
+        preview: '预览',
+        edit_file: '编辑文件'
     }
 }
