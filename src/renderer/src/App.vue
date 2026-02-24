@@ -48,6 +48,7 @@
               v-for="session in sessions"
               :key="session.id"
               :session="session"
+              :visible="session.id === activeSessionId && session.type === TAB_TYPES.SFTP"
               v-show="session.id === activeSessionId && session.type === TAB_TYPES.SFTP"
             />
           </div>
@@ -71,6 +72,7 @@
 </template>
 
 <script setup>
+import { sshAPI, hostsAPI } from '@/api/tauri-bridge'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import TitleBar from './components/TitleBar.vue'
@@ -104,7 +106,7 @@ function checkAllHosts() {
   Promise.allSettled(hosts.value.map(async host => {
     try {
       const plainHost = JSON.parse(JSON.stringify(host))
-      const res = await window.electronAPI.ssh.test(plainHost)
+      const res = await sshAPI.test(plainHost)
       
       pingStatuses.value[host.id] = res.success ? 'success' : 'error'
     } catch (e) {
@@ -115,7 +117,7 @@ function checkAllHosts() {
 }
 
 async function loadHosts() {
-  hosts.value = await window.electronAPI.hosts.getAll()
+  hosts.value = await hostsAPI.getAll()
   checkAllHosts()
 }
 
@@ -175,7 +177,7 @@ async function handleOpenSftpCwd(session) {
 }
 
 function closeSession(sessionId) {
-  window.electronAPI.ssh.disconnect(sessionId)
+  sshAPI.disconnect(sessionId)
   const idx = sessions.value.findIndex(s => s.id === sessionId)
   if (idx > -1) {
     sessions.value.splice(idx, 1)
@@ -201,7 +203,7 @@ function duplicateSession(session) {
 // 关闭其他标签（保留指定 sessionId 的标签）
 function closeOtherSessions(keepId) {
   const toClose = sessions.value.filter(s => s.id !== keepId)
-  toClose.forEach(s => window.electronAPI.ssh.disconnect(s.id))
+  toClose.forEach(s => sshAPI.disconnect(s.id))
   sessions.value = sessions.value.filter(s => s.id === keepId)
   activeSessionId.value = keepId
 }

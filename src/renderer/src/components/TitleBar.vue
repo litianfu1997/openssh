@@ -55,6 +55,7 @@
 </template>
 
 <script setup>
+import { windowAPI } from '@/api/tauri-bridge'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -80,9 +81,9 @@ function toggleLang() {
   localStorage.setItem('locale', locale.value)
 }
 
-function minimize() { window.electronAPI.minimize() }
-function maximize() { window.electronAPI.maximize() }
-function close() { window.electronAPI.close() }
+function minimize() { windowAPI.minimize() }
+function maximize() { windowAPI.maximize() }
+function close() { windowAPI.close() }
 
 onMounted(() => {
   const savedTheme = localStorage.getItem('theme')

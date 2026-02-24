@@ -82,6 +82,7 @@
 </template>
 
 <script setup>
+import { appAPI } from '@/api/tauri-bridge'
 import { ref, onMounted } from 'vue'
 import iconPath from '@/assets/icon.png'
 
@@ -104,8 +105,8 @@ function close() {
 // 自动更新逻辑
 async function loadConfig() {
   try {
-    appVersion.value = await window.electronAPI.updater.getVersion()
-    autoUpdateEnabled.value = await window.electronAPI.updater.getConfig()
+    appVersion.value = await appAPI.getVersion()
+    autoUpdateEnabled.value = await appAPI.getConfig()
   } catch (e) {
     console.error('Failed to load settings', e)
   }
@@ -113,7 +114,7 @@ async function loadConfig() {
 
 async function toggleAutoUpdate() {
   try {
-    await window.electronAPI.updater.setConfig(autoUpdateEnabled.value)
+    await appAPI.setConfig(autoUpdateEnabled.value)
   } catch (e) {
     console.error('Failed to save settings', e)
   }
@@ -126,7 +127,7 @@ async function checkUpdate() {
   updateMessage.value = ''
   
   try {
-    const result = await window.electronAPI.updater.checkManual()
+    const result = await appAPI.checkManual()
     // result 是 updateCheckResult 对象
     // 如果没有更新，result?.updateInfo.version 可能就是当前版本
     // 但通常 update-not-available 事件会触发
@@ -138,14 +139,14 @@ async function checkUpdate() {
 }
 
 function installUpdate() {
-  window.electronAPI.updater.install()
+  appAPI.install()
 }
 
 // 监听主进程的 updater 消息
 onMounted(() => {
   loadConfig()
 
-  window.electronAPI.updater.onStatus((status, info) => {
+  appAPI.onStatus((status, info) => {
     checking.value = status === 'checking'
     updateStatus.value = status
     
@@ -163,7 +164,7 @@ onMounted(() => {
     }
   })
 
-  window.electronAPI.updater.onProgress((progressObj) => {
+  appAPI.onProgress((progressObj) => {
     updateStatus.value = 'downloading'
     downloadProgress.value = Math.floor(progressObj.percent)
     updateMessage.value = `${downloadProgress.value}%`

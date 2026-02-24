@@ -65,6 +65,7 @@
 </template>
 
 <script setup>
+import { sshAPI } from '@/api/tauri-bridge'
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -80,8 +81,8 @@ const termRef = ref(null)
 let terminal = null
 let fitAddon = null
 let resizeObserver = null
-let dataListener = null
-let closedListener = null
+let unlistenData = null   // Tauri 事件取消订阅函数
+let unlistenClosed = null // Tauri 事件取消订阅函数
 let themeObserver = null
 let clickHandler = null
 
@@ -249,7 +250,7 @@ function createTerminal() {
 
   // 用户输入转发给主进程
   terminal.onData((data) => {
-    window.electronAPI.ssh.input(props.session.id, data)
+    sshAPI.input(props.session.id, data)
   })
 
   // 捕获终端标题，尝试提取当前路径 (Linux bash 默认标题: user@host: ~/path)
@@ -262,7 +263,7 @@ function createTerminal() {
   })
 
   terminal.onResize(({ cols, rows }) => {
-    window.electronAPI.ssh.resize(props.session.id, cols, rows)
+    sshAPI.resize(props.session.id, cols, rows)
   })
 
   // 自适应大小
@@ -287,34 +288,36 @@ function createTerminal() {
   })
   themeObserver.observe(document.documentElement, { attributes: true })
 
-  // 监听主进程传来的数据
-  dataListener = ({ sessionId, data }) => {
+  // 监听主进程传来的数据 (Tauri listen 返回 Promise<UnlistenFn>)
+  sshAPI.onData(({ sessionId, data }) => {
     if (sessionId === props.session.id) {
       terminal.write(data)
     }
-  }
-  closedListener = ({ sessionId }) => {
+  }).then((unlisten) => {
+    unlistenData = unlisten
+  })
+
+  sshAPI.onClosed(({ sessionId }) => {
     if (sessionId === props.session.id) {
       props.session.status = 'closed'
       terminal.write('\r\n\x1b[33m[连接已关闭]\x1b[0m\r\n')
     }
-  }
-
-  window.electronAPI.ssh.onData(dataListener)
-  window.electronAPI.ssh.onClosed(closedListener)
+  }).then((unlisten) => {
+    unlistenClosed = unlisten
+  })
 }
 
 async function connect() {
   props.session.status = 'connecting'
   try {
-    await window.electronAPI.ssh.connect(props.session.id, props.session.hostId)
+    await sshAPI.connect(props.session.id, props.session.hostId)
     props.session.status = 'connected'
     requestAnimationFrame(() => {
       fitAddon?.fit()
       terminal?.focus()
     })
     const { cols, rows } = terminal
-    window.electronAPI.ssh.resize(props.session.id, cols, rows)
+    sshAPI.resize(props.session.id, cols, rows)
   } catch (err) {
     props.session.status = 'error'
     props.session.errorMessage = err
@@ -347,10 +350,11 @@ onUnmounted(() => {
   if (termRef.value && clickHandler) {
     termRef.value.removeEventListener('click', clickHandler)
   }
-  window.electronAPI.ssh.removeAllListeners('ssh:data')
-  window.electronAPI.ssh.removeAllListeners('ssh:closed')
+  // 调用 Tauri 返回的取消订阅函数
+  unlistenData?.()
+  unlistenClosed?.()
   terminal?.dispose()
-  window.electronAPI.ssh.disconnect(props.session.id)
+  sshAPI.disconnect(props.session.id)
 })
 </script>
 

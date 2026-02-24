@@ -1,4 +1,5 @@
 <script setup>
+import { sftpAPI } from '@/api/tauri-bridge'
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FileIcon from './FileIcon.vue'
@@ -39,7 +40,7 @@ watch(() => props.file, async (newFile) => {
 
   loading.value = true
   try {
-    const result = await window.electronAPI.sftp.getFile(props.sessionId, remotePath.value)
+    const result = await sftpAPI.getFile(props.sessionId, remotePath.value)
     if (result.isImage) {
       isImage.value = true
       imageBase64.value = result.content

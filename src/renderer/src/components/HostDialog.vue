@@ -130,6 +130,7 @@
 </template>
 
 <script setup>
+import { hostsAPI, sshAPI } from '@/api/tauri-bridge'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -208,7 +209,7 @@ async function handleSave() {
   if (!data.group_name.trim()) {
     data.group_name = 'Default Group'
   }
-  await window.electronAPI.hosts.save(data)
+  if(data.id === null) delete data.id; await hostsAPI.save(data)
   emit('saved')
 }
 
@@ -217,7 +218,7 @@ async function handleTest() {
   testStatus.value = 'testing'
   testMessage.value = t('dialog.testing')
   try {
-    const result = await window.electronAPI.ssh.test({
+    const testConfig = {
       host: form.value.host,
       port: form.value.port || 22,
       username: form.value.username,
@@ -225,7 +226,10 @@ async function handleTest() {
       password: form.value.password,
       private_key: form.value.private_key,
       passphrase: form.value.passphrase
-    })
+    }
+    console.log('[handleTest] Sending config:', testConfig)
+    const result = await sshAPI.test(testConfig)
+    console.log('[handleTest] Result:', result, typeof result)
     if (result && result.success) {
       testStatus.value = 'success'
       testMessage.value = t('dialog.test_success')
@@ -234,6 +238,7 @@ async function handleTest() {
       testMessage.value = result?.message || t('dialog.test_failed')
     }
   } catch (e) {
+    console.error('[handleTest] Error:', e)
     testStatus.value = 'failed'
     testMessage.value = e.message || t('dialog.test_failed')
   }
@@ -246,7 +251,7 @@ async function handleTest() {
 
 async function handleDelete() {
   if (!confirm(t('dialog.confirm_delete', { name: form.value.name }))) return
-  await window.electronAPI.hosts.delete(form.value.id)
+  await hostsAPI.delete(form.value.id)
   emit('saved')
 }
 </script>

@@ -1,4 +1,5 @@
 <script setup>
+import { sftpAPI } from '@/api/tauri-bridge'
 import { ref, watch, computed } from 'vue'
 import FileIcon from './FileIcon.vue'
 import MonacoEditor from './MonacoEditor.vue'
@@ -56,7 +57,7 @@ const loadFile = async () => {
   loading.value = true
   error.value = null
   try {
-    const result = await window.electronAPI.sftp.getFile(props.sessionId, remotePath.value)
+    const result = await sftpAPI.getFile(props.sessionId, remotePath.value)
     if (result.isImage) {
       error.value = '无法在编辑器中打开图片。请使用预览功能。'
     } else if (result.isText) {
@@ -78,7 +79,7 @@ const handleSave = async (newVal) => {
 
   saving.value = true
   try {
-    await window.electronAPI.sftp.putFile(props.sessionId, remotePath.value, content.value)
+    await sftpAPI.putFile(props.sessionId, remotePath.value, content.value)
     originalContent.value = content.value
     emit('saved', props.file)
   } catch (err) {

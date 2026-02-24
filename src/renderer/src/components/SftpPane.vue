@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { sftpAPI, dialogAPI, sshAPI } from '@/api/tauri-bridge'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import SftpToolbar from './SftpToolbar.vue'
 import SftpTree from './SftpTree.vue'
 import SftpBreadcrumb from './SftpBreadcrumb.vue'
@@ -13,10 +14,14 @@ const props = defineProps({
   session: {
     type: Object,
     required: true
+  },
+  visible: {
+    type: Boolean,
+    default: false
   }
 })
 
-// 状态
+// 状�?
 const currentPath = ref('.')
 const absoluteHomePath = ref('/')
 const fileList = ref([])
@@ -27,19 +32,22 @@ const bookmarks = ref([])
 const transfers = ref([])
 const isTreeLoading = ref(false)
 const isListLoading = ref(false)
+const isInitialLoading = ref(true)
 const showPreview = ref(false)
 const editingFile = ref(null)
 const toast = ref(null)  // { message, type: 'success'|'error' }
 let toastTimer = null
+let unlistenUploadProgress = null   // Tauri 事件取消订阅函数
+let unlistenDownloadProgress = null // Tauri 事件取消订阅函数
 
-// 计算属性
+// 计算属�?
 const selectedCount = computed(() => selectedFiles.value.length)
 
 // 方法
 const loadDirectory = async (path) => {
   isListLoading.value = true
   try {
-    const result = await window.electronAPI.sftp.ls(props.session.id, path || '.')
+    const result = await sftpAPI.ls(props.session.id, path || '.')
     fileList.value = result
     if (path) currentPath.value = path
   } catch (error) {
@@ -53,8 +61,8 @@ const loadTree = async () => {
   isTreeLoading.value = true
   try {
     const rootPath = absoluteHomePath.value === '/' && currentPath.value === '.' ? '.' : absoluteHomePath.value
-    const result = await window.electronAPI.sftp.tree(props.session.id, rootPath, 1)
-    treeData.value = result
+    const result = await sftpAPI.ls(props.session.id, rootPath)
+    treeData.value = result.filter(f => f.name !== '.' && f.name !== '..').map(f => ({ ...f, path: rootPath === '/' ? '/' + f.name : rootPath + '/' + f.name }))
   } catch (error) {
     console.error('Failed to load tree:', error)
   } finally {
@@ -68,7 +76,7 @@ const handleLoadChildren = async (node) => {
   
   node.isLoading = true
   try {
-    const result = await window.electronAPI.sftp.ls(props.session.id, node.path)
+    const result = await sftpAPI.ls(props.session.id, node.path)
     node.children = result.filter(f => f.name !== '.' && f.name !== '..').map(f => ({
       ...f,
       path: node.path === '/' ? `/${f.name}` : `${node.path}/${f.name}`,
@@ -113,7 +121,7 @@ const handleBreadcrumbNavigate = (path) => {
 }
 
 const handleUpload = async () => {
-  const result = await window.electronAPI.dialog.showOpenDialog({
+  const result = await dialogAPI.showOpenDialog({
     properties: ['openFile', 'multiSelections']
   })
 
@@ -133,7 +141,7 @@ const handleUpload = async () => {
       })
 
       try {
-        await window.electronAPI.sftp.upload(props.session.id, transferId, localPath, remotePath)
+        await sftpAPI.upload(props.session.id, transferId, localPath, remotePath)
         refresh()
       } catch (error) {
         if (error.message && error.message.includes('Cancelled')) {
@@ -154,7 +162,7 @@ const handleDownload = async () => {
   for (const file of selectedFiles.value) {
     if (file.type === 'directory') continue
 
-    const result = await window.electronAPI.dialog.showSaveDialog({
+    const result = await dialogAPI.showSaveDialog({
       defaultPath: file.name
     })
 
@@ -171,7 +179,7 @@ const handleDownload = async () => {
 
       try {
         const remotePath = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
-        await window.electronAPI.sftp.download(props.session.id, transferId, remotePath, result.filePath)
+        await sftpAPI.download(props.session.id, transferId, remotePath, result.filePath)
       } catch (error) {
         if (error.message && error.message.includes('Cancelled')) {
           showToast(`文件 ${file.name} 下载已取消`, 'info')
@@ -190,12 +198,12 @@ const handleDownload = async () => {
 const handleDelete = async (files) => {
   const targets = files && files.length ? files : selectedFiles.value
   if (!targets.length) return
-  if (!confirm(`确定要删除 ${targets.length} 个项目吗？`)) return
+  if (!confirm(`确定要删�?${targets.length} 个项目吗？`)) return
 
   for (const file of targets) {
     try {
       const path = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
-      await window.electronAPI.sftp.delete(props.session.id, path)
+      await sftpAPI.delete(props.session.id, path)
     } catch (error) {
       console.error('Delete failed:', error)
     }
@@ -210,7 +218,7 @@ const handleMkdir = async () => {
 
   try {
     const path = currentPath.value === '/' ? `/${name}` : (currentPath.value === '.' ? name : `${currentPath.value}/${name}`)
-    await window.electronAPI.sftp.mkdir(props.session.id, path)
+    await sftpAPI.mkdir(props.session.id, path)
     refresh()
   } catch (error) {
     console.error('Mkdir failed:', error)
@@ -245,7 +253,7 @@ const saveBookmarks = () => {
 const handleAddBookmark = () => {
   const existing = bookmarks.value.find(b => b.path === currentPath.value)
   if (existing) {
-    showToast('当前路径已在收藏中', 'info')
+    showToast('当前路径已在收藏夹', 'info')
     return
   }
   
@@ -280,7 +288,7 @@ const handleRename = async (file) => {
   const oldPath = currentPath.value === '/' ? `/${oldName}` : (currentPath.value === '.' ? oldName : `${currentPath.value}/${oldName}`)
   const newPath = currentPath.value === '/' ? `/${newName}` : (currentPath.value === '.' ? newName : `${currentPath.value}/${newName}`)
   try {
-    await window.electronAPI.sftp.rename(props.session.id, oldPath, newPath)
+    await sftpAPI.rename(props.session.id, oldPath, newPath)
     refresh()
   } catch (error) {
     console.error('Rename failed:', error)
@@ -294,7 +302,7 @@ const handleEditFile = (file) => {
 }
 
 const onEditorSaved = async (file) => {
-  showToast(`✓ ${file.name} 已保存到服务器`, 'success')
+  showToast(`�?${file.name} 已保存到服务器`, 'success')
   await loadDirectory(currentPath.value) // 仅刷新当前目录结构，而不是刷新整棵树
 }
 
@@ -309,7 +317,7 @@ const handlePauseTransfer = async (transferId) => {
   if (t) {
     t.paused = true
     t.speed = 0
-    await window.electronAPI.sftp.pause(transferId)
+    await sftpAPI.pause(transferId)
   }
 }
 
@@ -317,15 +325,15 @@ const handleResumeTransfer = async (transferId) => {
   const t = transfers.value.find(x => x.id === transferId)
   if (t) {
     t.paused = false
-    await window.electronAPI.sftp.resume(transferId)
+    await sftpAPI.resume(transferId)
   }
 }
 
 const handleCancelTransfer = async (transferId) => {
   const index = transfers.value.findIndex(t => t.id === transferId)
   if (index > -1) {
-    await window.electronAPI.sftp.cancel(transferId)
-    // 触发 rejected callback, transfers 从那里自动移除
+    await sftpAPI.cancel(transferId)
+    // 触发 rejected callback, transfers 从那里自动移�?
   }
 }
 
@@ -335,31 +343,34 @@ const handlePreview = (file) => {
 }
 
 const loadInitialData = async () => {
+  isInitialLoading.value = true
+
   if (props.session.status !== 'connected') {
     try {
       props.session.status = 'connecting'
-      await window.electronAPI.ssh.connect(props.session.id, props.session.hostId)
+      await sshAPI.connect(props.session.id, props.session.hostId)
+      await sftpAPI.connect(props.session.id, props.session.hostId)
       props.session.status = 'connected'
     } catch (e) {
       console.error('SFTP connect failed:', e)
       props.session.status = 'error'
+      isInitialLoading.value = false
       return
     }
   }
 
   try {
-    // 获取家目录路径，作为所有相对路径的参考和树状图根目录
-    const homeAbs = await window.electronAPI.sftp.realpath(props.session.id, '.')
+    // 获取家目录路径
+    const homeAbs = await sftpAPI.realpath(props.session.id, '.')
     if (homeAbs) absoluteHomePath.value = homeAbs
 
-    // 如果初始化传入了cwd（通过终端右键在当前路径打开）
+    // 解析目标路径
     let targetPath = props.session.initialCwd || '.'
     if (targetPath.startsWith('~')) {
       targetPath = targetPath.replace(/^~/, homeAbs || '.')
     }
-    
-    // 解析最终要进入的目录绝对路径
-    const absPath = await window.electronAPI.sftp.realpath(props.session.id, targetPath)
+
+    const absPath = await sftpAPI.realpath(props.session.id, targetPath)
     if (absPath) {
       currentPath.value = absPath
     } else {
@@ -369,16 +380,18 @@ const loadInitialData = async () => {
     console.error('Failed to resolve paths', e)
   }
 
-  loadDirectory(currentPath.value)
-  loadTree()
+  // 加载目录和树
+  await Promise.all([loadDirectory(currentPath.value), loadTree()])
+  isInitialLoading.value = false
 }
 
 // 生命周期
 onMounted(() => {
   loadBookmarks()
   loadInitialData()
-  
-  window.electronAPI.sftp.onUploadProgress(({ sessionId, remotePath, bytesTransferred, totalBytes, speed }) => {
+
+  // Tauri listen 返回 Promise<UnlistenFn>，保存取消订阅函数
+  sftpAPI.onUploadProgress(({ sessionId, remotePath, bytesTransferred, totalBytes, speed }) => {
     if (sessionId !== props.session.id) return
     const fileName = remotePath.split('/').pop()
     const transfer = transfers.value.find(t => t.fileName === fileName && t.type === 'upload')
@@ -386,9 +399,11 @@ onMounted(() => {
       transfer.progress = Math.round((bytesTransferred / totalBytes) * 100)
       if (speed !== undefined) transfer.speed = speed
     }
+  }).then((unlisten) => {
+    unlistenUploadProgress = unlisten
   })
 
-  window.electronAPI.sftp.onDownloadProgress(({ sessionId, remotePath, bytesTransferred, totalBytes, speed }) => {
+  sftpAPI.onDownloadProgress(({ sessionId, remotePath, bytesTransferred, totalBytes, speed }) => {
     if (sessionId !== props.session.id) return
     const fileName = remotePath.split('/').pop()
     const transfer = transfers.value.find(t => t.fileName === fileName && t.type === 'download')
@@ -396,18 +411,29 @@ onMounted(() => {
       transfer.progress = Math.round((bytesTransferred / totalBytes) * 100)
       if (speed !== undefined) transfer.speed = speed
     }
+  }).then((unlisten) => {
+    unlistenDownloadProgress = unlisten
   })
 })
 
 onUnmounted(() => {
-  window.electronAPI.sftp.removeUploadProgressListener()
-  window.electronAPI.sftp.removeDownloadProgressListener()
-  window.electronAPI.ssh.disconnect(props.session.id)
+  // 调用 Tauri 返回的取消订阅函数
+  unlistenUploadProgress?.()
+  unlistenDownloadProgress?.()
+  sshAPI.disconnect(props.session.id)
 })
 </script>
 
 <template>
   <div class="sftp-pane">
+    <!-- 初始加载遮罩层 -->
+    <div v-if="isInitialLoading" class="initial-loading-overlay">
+      <div class="loading-box">
+        <div class="spinner" />
+        <div class="loading-text">正在连接 SFTP...</div>
+      </div>
+    </div>
+
     <SftpToolbar
       :selected-count="selectedCount"
       :bookmarks="bookmarks"
@@ -461,7 +487,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 内置代码编辑器 (全屏覆盖 SFTP 界面) -->
+    <!-- 内置代码编辑�?(全屏覆盖 SFTP 界面) -->
     <SftpEditor
       v-if="editingFile"
       :file="editingFile"
@@ -519,6 +545,48 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Loading Overlay */
+.initial-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-color);
+  z-index: 100;
+}
+
+.loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 32px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-color);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Toast */
