@@ -279,6 +279,14 @@ function createTerminal() {
 
   // 用户输入拦截与补全计算
   terminal.onData((data) => {
+    // 如果处于 alternate buffer（通常是 vim, htop 等 TUI 程序），禁用补全逻辑
+    if (terminal?.buffer.active.type === 'alternate') {
+      localBuffer.value = ''
+      isPopupOpen.value = false
+      sshAPI.input(props.session.id, data)
+      return
+    }
+
     if (data === '\t') {
       // Tab 键：弹窗未打开时让 shell 原生处理
       if (!isPopupOpen.value) {
@@ -531,7 +539,7 @@ const ghostText = computed(() => {
 function saveHistory(_cmd) { /* no-op: 只使用服务器历史 */ }
 
 function updateSuggestions() {
-  if (!localBuffer.value.trim()) {
+  if (!terminal || terminal.buffer.active.type === 'alternate' || !localBuffer.value.trim()) {
     isPopupOpen.value = false;
     suggestions.value = [];
     return;
@@ -553,7 +561,10 @@ function updateSuggestions() {
 }
 
 function updatePopupPosition() {
-  if (!terminal || !termRef.value) return
+  if (!terminal || !termRef.value || terminal.buffer.active.type === 'alternate') {
+    isPopupOpen.value = false;
+    return;
+  }
   const cursorX = terminal.buffer.active.cursorX
   const cursorY = terminal.buffer.active.cursorY
 
@@ -792,15 +803,17 @@ onUnmounted(() => {
 }
 
 .ac-item {
-  padding: 5px 10px;
+  padding: 6px 12px;
   font-size: 13px;
   font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
   cursor: pointer;
   border-radius: 4px;
-  white-space: nowrap;
+  white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
   display: flex;
+  align-items: center;
+  letter-spacing: 0.5px;
 }
 
 .ac-typed {
