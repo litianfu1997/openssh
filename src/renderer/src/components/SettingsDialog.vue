@@ -40,12 +40,13 @@
 
           <!-- 更新状态区域 -->
           <Transition name="slide-fade">
-            <div class="update-status-card" v-if="updateStatus && updateStatus !== 'not-available'">
+            <div class="update-status-card" v-if="updateStatus">
               <div class="status-header">
                 <span class="status-indicator" :class="updateStatus"></span>
                 <span class="status-text">
                   <template v-if="updateStatus === 'checking'">{{ $t('settings.checking') }}...</template>
                   <template v-else-if="updateStatus === 'available'">{{ $t('settings.update_available') }} v{{ updateMessage }}</template>
+                  <template v-else-if="updateStatus === 'not-available'">已是最新版本</template>
                   <template v-else-if="updateStatus === 'downloading'">{{ $t('settings.downloading') }}</template>
                   <template v-else-if="updateStatus === 'downloaded'">{{ $t('settings.update_downloaded') }}</template>
                   <template v-else-if="updateStatus === 'error'">{{ $t('settings.update_error') }}</template>
@@ -58,9 +59,9 @@
               </div>
               <div class="progress-text" v-if="updateStatus === 'downloading'">{{ downloadProgress }}%</div>
 
-              <div class="update-actions" v-if="updateStatus === 'downloaded'">
+              <div class="update-actions" v-if="updateStatus === 'available' || updateStatus === 'downloaded'">
                 <button class="btn-primary btn-sm btn-block" @click="installUpdate">
-                  {{ $t('settings.install_now') }}
+                  {{ updateStatus === 'available' ? '确认下载' : $t('settings.install_now') }}
                 </button>
               </div>
                <div class="update-error-msg" v-if="updateStatus === 'error'">

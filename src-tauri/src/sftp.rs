@@ -3,6 +3,7 @@ use russh_sftp::client::SftpSession;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use tokio::sync::{Mutex, RwLock};
 use tokio::io::AsyncWriteExt;
 use tauri::{AppHandle, Emitter};
@@ -22,17 +23,10 @@ impl client::Handler for SftpClientHandler {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum TransferStatus {
-    Running,
-    Paused,
-    Cancelled,
-    Done,
-}
-
-pub struct TransferState {
-    pub status: TransferStatus,
-}
+// 传输状态常量（使用 AtomicU8 无锁通信，彻底避免死锁）
+const TRANSFER_RUNNING: u8 = 0;
+const TRANSFER_PAUSED: u8 = 1;
+const TRANSFER_CANCELLED: u8 = 2;
 
 pub struct SftpManager {
     /// sessionId -> SftpSession
@@ -40,8 +34,8 @@ pub struct SftpManager {
     /// sftp sessions also need ssh handles alive
     #[allow(private_interfaces)]
     pub handles: RwLock<HashMap<String, client::Handle<SftpClientHandler>>>,
-    /// transferId -> TransferState
-    pub transfers: RwLock<HashMap<String, Arc<Mutex<TransferState>>>>,
+    /// transferId -> AtomicU8 状态标记
+    pub transfers: RwLock<HashMap<String, Arc<AtomicU8>>>,
 }
 
 impl SftpManager {
@@ -181,7 +175,8 @@ pub async fn sftp_upload(
 ) -> Result<bool, String> {
     let (sftp_arc, _) = sftp_get_host(&app, &host_map, &mgr, &session_id).await?;
 
-    let state = Arc::new(Mutex::new(TransferState { status: TransferStatus::Running }));
+    // AtomicU8 无锁状态标记
+    let state = Arc::new(AtomicU8::new(TRANSFER_RUNNING));
     mgr.transfers.write().await.insert(transfer_id.clone(), state.clone());
 
     let file_content = tokio::fs::read(&local_path).await.map_err(|e| e.to_string())?;
@@ -196,27 +191,24 @@ pub async fn sftp_upload(
         remote_path.clone()
     };
 
-    let sftp = sftp_arc.lock().await;
-    let mut remote_file = sftp.create(&dest).await.map_err(|e| e.to_string())?;
+    let mut remote_file = {
+        let sftp = sftp_arc.lock().await;
+        sftp.create(&dest).await.map_err(|e| e.to_string())?
+    };
     
     let chunk_size: usize = 64 * 1024;
     let mut offset: usize = 0;
     let start = std::time::Instant::now();
 
     while offset < file_content.len() {
-        {
-            let st = state.lock().await;
-            match st.status {
-                TransferStatus::Cancelled => {
-                    return Err("Cancelled".to_string());
-                }
-                TransferStatus::Paused => {
-                    drop(st);
-                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                    continue;
-                }
-                _ => {}
-            }
+        let s = state.load(Ordering::Relaxed);
+        if s == TRANSFER_CANCELLED {
+            mgr.transfers.write().await.remove(&transfer_id);
+            return Err("Cancelled".to_string());
+        }
+        if s == TRANSFER_PAUSED {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            continue;
         }
 
         let end = (offset + chunk_size).min(file_content.len());
@@ -251,53 +243,73 @@ pub async fn sftp_download(
 ) -> Result<bool, String> {
     let (sftp_arc, _) = sftp_get_host(&app, &host_map, &mgr, &session_id).await?;
 
-    let state = Arc::new(Mutex::new(TransferState { status: TransferStatus::Running }));
+    // AtomicU8 无锁状态标记
+    let state = Arc::new(AtomicU8::new(TRANSFER_RUNNING));
     mgr.transfers.write().await.insert(transfer_id.clone(), state.clone());
 
-    let sftp = sftp_arc.lock().await;
-    let data = sftp.read(&remote_path).await.map_err(|e| e.to_string())?;
-    
-    let total = data.len() as u64;
-    let start = std::time::Instant::now();
+    // 极短时间持有 sftp 锁：仅获取文件大小和打开文件句柄
+    let (total, mut remote_file) = {
+        let sftp = sftp_arc.lock().await;
+        let total = match sftp.metadata(&remote_path).await {
+            Ok(meta) => meta.size.unwrap_or(0),
+            Err(_) => 0,
+        };
+        let remote_file = sftp.open(&remote_path).await.map_err(|e| e.to_string())?;
+        (total, remote_file)
+    };
 
     let mut file = tokio::fs::File::create(&local_path).await.map_err(|e| e.to_string())?;
-    let chunk_size: usize = 64 * 1024;
-    let mut offset: usize = 0;
+    let mut buf = vec![0u8; 128 * 1024];
+    let mut offset: u64 = 0;
+    let start = std::time::Instant::now();
 
-    while offset < data.len() {
-        {
-            let st = state.lock().await;
-            match st.status {
-                TransferStatus::Cancelled => return Err("Cancelled".to_string()),
-                TransferStatus::Paused => {
-                    drop(st);
-                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                    continue;
-                }
-                _ => {}
-            }
+    use tokio::io::AsyncReadExt;
+
+    loop {
+        // 检查取消/暂停（无锁，Relaxed 足够）
+        let s = state.load(Ordering::Relaxed);
+        if s == TRANSFER_CANCELLED {
+            drop(remote_file); // 先释放文件句柄
+            let _ = tokio::fs::remove_file(&local_path).await;
+            mgr.transfers.write().await.remove(&transfer_id);
+            return Err("Cancelled".to_string());
+        }
+        if s == TRANSFER_PAUSED {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            continue;
         }
 
-        let end = (offset + chunk_size).min(data.len());
-        file.write_all(&data[offset..end]).await.map_err(|e| e.to_string())?;
-        offset = end;
+        // 流式分块读取
+        let n = remote_file.read(&mut buf).await.map_err(|e| {
+            let _ = std::fs::remove_file(&local_path); // 同步清理
+            e.to_string()
+        })?;
 
+        if n == 0 {
+            break;
+        }
+
+        file.write_all(&buf[..n]).await.map_err(|e| {
+            let _ = std::fs::remove_file(&local_path);
+            e.to_string()
+        })?;
+
+        offset += n as u64;
         let elapsed = start.elapsed().as_secs().max(1);
-        let speed = offset as u64 / elapsed;
         let _ = app.emit("sftp:download-progress", TransferProgressEvent {
             transfer_id: transfer_id.clone(),
             session_id: session_id.clone(),
             remote_path: remote_path.clone(),
-            bytes_transferred: offset as u64,
+            bytes_transferred: offset,
             total_bytes: total,
-            speed,
+            speed: offset / elapsed,
         });
     }
 
+    file.flush().await.map_err(|e| e.to_string())?;
     mgr.transfers.write().await.remove(&transfer_id);
     Ok(true)
 }
-
 
 /// A helper to hold session->host_id mapping
 pub struct SessionHostMap(pub RwLock<HashMap<String, String>>);
@@ -539,7 +551,7 @@ pub async fn sftp_pause(
 ) -> Result<(), String> {
     let transfers = mgr.transfers.read().await;
     if let Some(state) = transfers.get(&transfer_id) {
-        state.lock().await.status = TransferStatus::Paused;
+        state.store(TRANSFER_PAUSED, Ordering::Relaxed);
     }
     Ok(())
 }
@@ -551,7 +563,7 @@ pub async fn sftp_resume(
 ) -> Result<(), String> {
     let transfers = mgr.transfers.read().await;
     if let Some(state) = transfers.get(&transfer_id) {
-        state.lock().await.status = TransferStatus::Running;
+        state.store(TRANSFER_RUNNING, Ordering::Relaxed);
     }
     Ok(())
 }
@@ -563,7 +575,7 @@ pub async fn sftp_cancel(
 ) -> Result<(), String> {
     let transfers = mgr.transfers.read().await;
     if let Some(state) = transfers.get(&transfer_id) {
-        state.lock().await.status = TransferStatus::Cancelled;
+        state.store(TRANSFER_CANCELLED, Ordering::Relaxed);
     }
     Ok(())
 }

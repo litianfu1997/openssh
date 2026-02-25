@@ -121,9 +121,16 @@ const handleBreadcrumbNavigate = (path) => {
 }
 
 const handleUpload = async () => {
-  const result = await dialogAPI.showOpenDialog({
-    properties: ['openFile', 'multiSelections']
-  })
+  let result
+  try {
+    result = await dialogAPI.showOpenDialog({
+      properties: ['openFile', 'multiSelections']
+    })
+  } catch (e) {
+    // 用户取消对话框时 Tauri 可能抛出异常，安全处理
+    console.warn('Upload dialog error:', e)
+    return
+  }
 
   if (!result.canceled && result.filePaths.length > 0) {
     for (const localPath of result.filePaths) {
@@ -144,7 +151,7 @@ const handleUpload = async () => {
         await sftpAPI.upload(props.session.id, transferId, localPath, remotePath)
         refresh()
       } catch (error) {
-        if (error.message && error.message.includes('Cancelled')) {
+        if (String(error).includes('Cancelled')) {
           showToast(`文件 ${fileName} 上传已取消`, 'info')
         } else {
           console.error('Upload failed:', error)
@@ -158,39 +165,45 @@ const handleUpload = async () => {
   }
 }
 
+
 const handleDownload = async () => {
   for (const file of selectedFiles.value) {
     if (file.type === 'directory') continue
 
-    const result = await dialogAPI.showSaveDialog({
-      defaultPath: file.name
-    })
-
-    if (!result.canceled) {
-      const transferId = Date.now().toString() + Math.random().toString().slice(2)
-      transfers.value.push({
-        id: transferId,
-        fileName: file.name,
-        type: 'download',
-        progress: 0,
-        speed: 0,
-        paused: false
+    try {
+      const result = await dialogAPI.showSaveDialog({
+        defaultPath: file.name
       })
 
-      try {
-        const remotePath = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
-        await sftpAPI.download(props.session.id, transferId, remotePath, result.filePath)
-      } catch (error) {
-        if (error.message && error.message.includes('Cancelled')) {
-          showToast(`文件 ${file.name} 下载已取消`, 'info')
-        } else {
-          console.error('Download failed:', error)
-          showToast(`文件 ${file.name} 下载失败`, 'error')
+      if (!result.canceled) {
+        const transferId = Date.now().toString() + Math.random().toString().slice(2)
+        transfers.value.push({
+          id: transferId,
+          fileName: file.name,
+          type: 'download',
+          progress: 0,
+          speed: 0,
+          paused: false
+        })
+
+        try {
+          const remotePath = currentPath.value === '/' ? `/${file.name}` : (currentPath.value === '.' ? file.name : `${currentPath.value}/${file.name}`)
+          await sftpAPI.download(props.session.id, transferId, remotePath, result.filePath)
+        } catch (error) {
+          if (String(error).includes('Cancelled')) {
+            showToast(`文件 ${file.name} 下载已取消`, 'info')
+          } else {
+            console.error('Download failed:', error)
+            showToast(`文件 ${file.name} 下载失败`, 'error')
+          }
+        } finally {
+          const index = transfers.value.findIndex(t => t.id === transferId)
+          if (index > -1) transfers.value.splice(index, 1)
         }
-      } finally {
-        const index = transfers.value.findIndex(t => t.id === transferId)
-        if (index > -1) transfers.value.splice(index, 1)
       }
+    } catch (e) {
+      // 捕获对话框本身可能抛出的任何意外异常（如用户取消）
+      console.warn('Download dialog error for', file.name, e)
     }
   }
 }
