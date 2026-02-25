@@ -50,8 +50,13 @@ export const sshAPI = {
   disconnect: (sessionId) => invoke('ssh_disconnect', { sessionId }),
   test: (hostConfig) => invoke('ssh_test', { hostConfig }),
   // 返回 unlisten 函数，调用者需要在 onUnmounted 中调用
-  onOutput: (sessionId, cb) => {
-    return listen(`ssh-output-${sessionId}`, (event) => {
+  onData: (cb) => {
+    return listen('ssh:data', (event) => {
+      cb(event.payload)
+    })
+  },
+  onClosed: (cb) => {
+    return listen('ssh:closed', (event) => {
       cb(event.payload)
     })
   }
