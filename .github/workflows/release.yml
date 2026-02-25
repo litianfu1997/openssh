@@ -163,7 +163,7 @@ jobs:
   build-macos-x64:
     name: Build macOS (Intel x64)
     needs: create-release
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 

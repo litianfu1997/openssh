@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.2] - 2026-02-25
+
+### 🔧 CI Fixes
+- Fixed macOS Intel build by switching to `macos-latest` runner with cross-compilation.
+
 ## [v0.3.1] - 2026-02-25
 
 ### 🚀 Major Architectural Shift (Electron -> Tauri v2)
