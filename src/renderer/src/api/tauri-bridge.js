@@ -67,8 +67,10 @@ export const sftpAPI = {
   connect: (sessionId, hostId) => invoke('sftp_connect_session', { sessionId, hostId }),
   realpath: (sessionId, path) => invoke('sftp_realpath', { sessionId, path }),
   list: (sessionId, path) => invoke('sftp_list', { sessionId, path }),
-  upload: (sessionId, localPath, remotePath) => invoke('sftp_upload', { sessionId, localPath, remotePath }),
-  download: (sessionId, remotePath, localPath) => invoke('sftp_download', { sessionId, remotePath, localPath }),
+  // ls 是 list 的别名，保持与 Electron API 兼容
+  ls: (sessionId, path) => invoke('sftp_list', { sessionId, path }),
+  upload: (sessionId, transferId, localPath, remotePath) => invoke('sftp_upload', { sessionId, transferId, localPath, remotePath }),
+  download: (sessionId, transferId, remotePath, localPath) => invoke('sftp_download', { sessionId, transferId, remotePath, localPath }),
   delete: (sessionId, path) => invoke('sftp_delete', { sessionId, path }),
   rename: (sessionId, oldPath, newPath) => invoke('sftp_rename', { sessionId, oldPath, newPath }),
   mkdir: (sessionId, path) => invoke('sftp_mkdir', { sessionId, path }),
@@ -88,6 +90,17 @@ export const sftpAPI = {
   },
   onTransferProgress: (cb) => {
     return listen('sftp-transfer-progress', (event) => {
+      cb(event.payload)
+    })
+  },
+  // 兼容 Electron API 的事件监听器
+  onUploadProgress: (cb) => {
+    return listen('sftp:upload-progress', (event) => {
+      cb(event.payload)
+    })
+  },
+  onDownloadProgress: (cb) => {
+    return listen('sftp:download-progress', (event) => {
       cb(event.payload)
     })
   }
