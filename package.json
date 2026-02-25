@@ -1,19 +1,13 @@
 {
     "name": "openssh-client",
-    "version": "v0.2.4",
+    "version": "0.3.1",
     "description": "A lightweight and clean SSH client",
     "main": "out/main/index.js",
     "author": "openSSH",
     "license": "MIT",
     "scripts": {
-        "dev": "electron-vite dev",
-        "build": "electron-vite build",
-        "preview": "electron-vite preview",
-        "package": "electron-vite build && electron-builder",
-        "build:win": "npm run build && electron-builder --win",
-        "build:mac": "npm run build && electron-builder --mac",
-        "build:linux": "npm run build && electron-builder --linux",
-        "build:all": "npm run build && electron-builder -mwl",
+        "dev": "tauri dev",
+        "build": "tauri build",
         "tauri": "tauri",
         "vite:dev": "vite",
         "vite:build": "vite build"
@@ -25,91 +19,21 @@
         "@tauri-apps/plugin-os": "^2.3.2",
         "@tauri-apps/plugin-store": "^2.4.2",
         "@tauri-apps/plugin-updater": "^2.10.0",
-        "electron-store": "^8.2.0",
-        "electron-updater": "^6.8.3",
         "lucide-vue-next": "^0.575.0",
         "monaco-editor": "^0.55.1",
-        "ssh2": "^1.16.0",
         "uuid": "^9.0.1",
         "vue-i18n": "^11.2.8"
     },
     "devDependencies": {
-        "@electron-toolkit/utils": "^3.0.0",
         "@tauri-apps/cli": "^2.10.0",
         "@vitejs/plugin-vue": "^5.0.4",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/addon-search": "^0.15.0",
         "@xterm/addon-web-links": "^0.11.0",
         "@xterm/xterm": "^5.5.0",
-        "electron": "^29.1.0",
-        "electron-builder": "^24.13.3",
-        "electron-vite": "^2.1.0",
         "sharp": "^0.34.5",
         "to-ico": "^1.1.5",
         "vite": "^5.1.6",
         "vue": "^3.4.21"
-    },
-    "build": {
-        "appId": "com.openssh.client",
-        "productName": "OpenSSH",
-        "icon": "resources/icon.png",
-        "asar": true,
-        "asarUnpack": [
-            "node_modules/ssh2/**",
-            "node_modules/cpu-features/**",
-            "node_modules/nan/**"
-        ],
-        "publish": [
-            {
-                "provider": "github",
-                "owner": "litianfu1997",
-                "repo": "openssh"
-            }
-        ],
-        "directories": {
-            "output": "release"
-        },
-        "artifactName": "${name}-${version}-${os}-${arch}.${ext}",
-        "files": [
-            "out/**",
-            "!out/**/*.map",
-            "!**/*.{md,txt,ts,map}",
-            "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}/**",
-            "!**/node_modules/.bin/**"
-        ],
-        "extraResources": [
-            {
-                "from": "resources/icon.png",
-                "to": "icon.png"
-            }
-        ],
-        "win": {
-            "target": [
-                {
-                    "target": "nsis",
-                    "arch": [
-                        "x64"
-                    ]
-                }
-            ],
-            "icon": "resources/icon.ico"
-        },
-        "compression": "maximum",
-        "nsis": {
-            "oneClick": false,
-            "allowToChangeInstallationDirectory": true,
-            "createDesktopShortcut": true,
-            "createStartMenuShortcut": true,
-            "deleteAppDataOnUninstall": false
-        },
-        "mac": {
-            "target": "dmg",
-            "icon": "resources/icon.png",
-            "hardenedRuntime": false
-        },
-        "linux": {
-            "target": "AppImage",
-            "icon": "resources/icon.png"
-        }
     }
 }

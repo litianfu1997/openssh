@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] - 2026-02-25
+
+### 🚀 Major Architectural Shift (Electron -> Tauri v2)
+> [!IMPORTANT]
+> This is a major update featuring a complete rewrite of the core engine. If you require absolute stability, please stick with the **v0.2.x** versions (Electron-based).
+>
+> 这是一个重大的架构更新，核心引擎已完全重构。如果您需要绝对的稳定性，请继续使用 **v0.2.x** 版本（基于 Electron）。
+
+- **Core Migration**: Successfully migrated the entire backend from Node.js (Electron) to **Rust (Tauri v2)**.
+- **Enhanced Performance**: 
+  - Significant reduction in memory footprint and installation size.
+  - Native SSH implementation using the `russh` crate for lower latency and better multi-threading.
+- **SFTP Overhaul**:
+  - Rewritten SFTP engine using asynchronous Rust I/O for faster file transfers.
+  - Refined Transfer Queue with robust Pause, Resume, and Cancel support, fixing several race condition crashes found in previous versions.
+- **Build System**: Updated GitHub Actions to automatically build and release optimized binaries for Windows (x64) and macOS (Intel & Silicon).
+
+### 🐛 Bug Fixes
+- Fixed SFTP transfer crashes related to concurrent file operations.
+- Resolved memory leak issues during long SSH sessions.
+
 ## [v0.2.4] - 2026-02-24
 
 ### 🌐 Internationalization (i18n)
