@@ -2,11 +2,12 @@ use async_trait::async_trait;
 use russh::client;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use tauri::{AppHandle, Emitter};
 use crate::db::DecryptedHostConfig;
 
-struct ClientHandler;
+pub(crate) struct ClientHandler;
 
 #[async_trait]
 impl client::Handler for ClientHandler {
@@ -21,8 +22,8 @@ impl client::Handler for ClientHandler {
 
 pub struct SshSession {
     pub channel: Arc<Mutex<Option<russh::Channel<client::Msg>>>>,
-    #[allow(dead_code, private_interfaces)]
     pub handle: russh::client::Handle<ClientHandler>,
+    pub is_connected: Arc<std::sync::atomic::AtomicBool>,
 }
 
 pub struct SshManager(pub RwLock<HashMap<String, Arc<SshSession>>>);
@@ -46,6 +47,23 @@ struct SshClosedEvent {
     session_id: String,
 }
 
+/// 创建带有 keep-alive 的 SSH 客户端配置
+fn create_ssh_config() -> Arc<client::Config> {
+    let config = client::Config {
+        // 启用 keep-alive：每 30 秒发送一次心跳
+        keepalive_interval: Some(Duration::from_secs(30)),
+        // 3 次心跳无响应后断开连接
+        keepalive_max: 3,
+        // 10 分钟无活动后断开（作为兜底，给 keep-alive 足够时间工作）
+        inactivity_timeout: Some(Duration::from_secs(600)),
+        // 增大窗口大小以提高性能
+        window_size: 2097152,
+        maximum_packet_size: 32768,
+        ..Default::default()
+    };
+    Arc::new(config)
+}
+
 #[tauri::command]
 pub async fn ssh_test(host_config: DecryptedHostConfig) -> Result<serde_json::Value, String> {
     // Debug log
@@ -55,9 +73,8 @@ pub async fn ssh_test(host_config: DecryptedHostConfig) -> Result<serde_json::Va
         host_config.password.as_ref().map(|p| if p.is_empty() { "EMPTY" } else { "SET" }),
         host_config.private_key.as_ref().map(|p| if p.is_empty() { "EMPTY" } else { "SET" }));
 
-    // Just a testing wrapper, connects and disconnects immediately
-    let config = client::Config::default();
-    let config = Arc::new(config);
+    // 使用带 keep-alive 的配置
+    let config = create_ssh_config();
 
     let mut session = match client::connect(config, (host_config.host.as_str(), host_config.port), ClientHandler).await {
         Ok(h) => h,
@@ -114,9 +131,8 @@ pub async fn ssh_connect(
     // 1. Get host config
     let host_config = crate::db::get_host(app.clone(), host_id).await?.ok_or("Host not found")?;
 
-    // 2. Connect
-    let config = client::Config::default();
-    let config = Arc::new(config);
+    // 2. Connect with keep-alive enabled
+    let config = create_ssh_config();
 
     let mut session_handle = client::connect(config, (host_config.host.as_str(), host_config.port), ClientHandler)
         .await
@@ -158,89 +174,160 @@ pub async fn ssh_connect(
     channel.request_shell(true).await.map_err(|e| e.to_string())?;
 
     let channel_arc = Arc::new(Mutex::new(Some(channel)));
-    
+    let is_connected = Arc::new(std::sync::atomic::AtomicBool::new(true));
+
     // Create the session
     let ssh_session = Arc::new(SshSession {
         channel: channel_arc.clone(),
         handle: session_handle,
+        is_connected: is_connected.clone(),
     });
 
     manager.0.write().await.insert(session_id.clone(), ssh_session);
 
     // 5. Spawn a task to listen to channel data
-    // Use timeout to periodically release the lock so ssh_input can acquire it
+    // 改进：不再在锁内等待，而是使用 try_wait 或非阻塞方式
     let session_id_clone = session_id.clone();
+    let app_clone = app.clone();
+
     tokio::spawn(async move {
         eprintln!("[ssh_connect] Starting data listener for session {}", session_id_clone);
+
+        // 用于追踪连续的错误次数
+        let mut consecutive_errors = 0u32;
+        const MAX_ERRORS: u32 = 10;
+
         loop {
-            // Use timeout to ensure lock is released periodically
-            let msg = {
-                let mut ch = channel_arc.lock().await;
+            // 先检查连接状态
+            if !is_connected.load(std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("[ssh_connect] Connection marked as closed, exiting loop");
+                break;
+            }
+
+            // 使用短暂锁定来检查 channel 状态
+            let msg_result = {
+                let mut ch = match channel_arc.try_lock() {
+                    Ok(guard) => guard,
+                    Err(_) => {
+                        // 锁被占用，稍后重试
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        continue;
+                    }
+                };
+
                 if let Some(ref mut channel) = *ch {
-                    // Wait with timeout to allow other tasks to acquire the lock
-                    match tokio::time::timeout(std::time::Duration::from_millis(50), channel.wait()).await {
-                        Ok(msg) => msg,
+                    // 使用 timeout 来避免无限等待
+                    match tokio::time::timeout(Duration::from_millis(100), channel.wait()).await {
+                        Ok(msg) => {
+                            consecutive_errors = 0; // 重置错误计数
+                            Some(msg)
+                        }
                         Err(_) => {
-                            // Timeout - release lock and continue
-                            continue;
+                            // Timeout - 这是正常的，继续循环
+                            None
                         }
                     }
                 } else {
                     eprintln!("[ssh_connect] Channel is None, exiting loop");
-                    break;
-                }
-            };
-
-            match msg {
-                Some(russh::ChannelMsg::Data { data }) => {
-                    let text = String::from_utf8_lossy(&data).to_string();
-                    eprintln!("[ssh_connect] Received {} bytes", text.len());
-                    let _ = app.emit("ssh:data", SshDataEvent {
-                        session_id: session_id_clone.clone(),
-                        data: text,
-                    });
-                }
-                Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) | None => {
-                    eprintln!("[ssh_connect] Channel closed");
-                    let _ = app.emit("ssh:closed", SshClosedEvent {
+                    let _ = app_clone.emit("ssh:closed", SshClosedEvent {
                         session_id: session_id_clone.clone()
                     });
                     break;
                 }
-                _ => {}
+            };
+
+            // 在锁外处理消息
+            if let Some(msg) = msg_result {
+                match msg {
+                    Some(russh::ChannelMsg::Data { data }) => {
+                        let text = String::from_utf8_lossy(&data).to_string();
+                        let _ = app_clone.emit("ssh:data", SshDataEvent {
+                            session_id: session_id_clone.clone(),
+                            data: text,
+                        });
+                    }
+                    Some(russh::ChannelMsg::Eof) => {
+                        eprintln!("[ssh_connect] Received EOF, waiting for close");
+                        // EOF 不立即断开，等待 Close 消息
+                    }
+                    Some(russh::ChannelMsg::Close) => {
+                        eprintln!("[ssh_connect] Channel closed by server");
+                        is_connected.store(false, std::sync::atomic::Ordering::Relaxed);
+                        let _ = app_clone.emit("ssh:closed", SshClosedEvent {
+                            session_id: session_id_clone.clone()
+                        });
+                        break;
+                    }
+                    None => {
+                        // None 可能是暂时性的错误，增加计数但不立即断开
+                        consecutive_errors += 1;
+                        if consecutive_errors >= MAX_ERRORS {
+                            eprintln!("[ssh_connect] Too many consecutive errors ({}), closing", consecutive_errors);
+                            is_connected.store(false, std::sync::atomic::Ordering::Relaxed);
+                            let _ = app_clone.emit("ssh:closed", SshClosedEvent {
+                                session_id: session_id_clone.clone()
+                            });
+                            break;
+                        }
+                        // 短暂等待后重试
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                    _ => {
+                        // 其他消息类型，忽略
+                    }
+                }
             }
         }
+
+        // 清理：标记连接已断开
+        is_connected.store(false, std::sync::atomic::Ordering::Relaxed);
         eprintln!("[ssh_connect] Data listener exited for session {}", session_id_clone);
     });
 
-    eprintln!("[ssh_connect] Connection established for session {}", session_id);
+    eprintln!("[ssh_connect] Connection established for session {} with keep-alive enabled", session_id);
     Ok(true)
 }
 
 #[tauri::command]
 pub async fn ssh_input(manager: tauri::State<'_, SshManager>, session_id: String, data: String) -> Result<(), String> {
-    eprintln!("[ssh_input] session_id={}, data={:?}", session_id, data);
     let map = manager.0.read().await;
     if let Some(session) = map.get(&session_id) {
-        eprintln!("[ssh_input] Found session, trying to acquire lock...");
-        let mut ch = session.channel.lock().await;
-        eprintln!("[ssh_input] Lock acquired");
-        if let Some(ref mut channel) = *ch {
-            channel.data(data.as_bytes()).await.map_err(|e| e.to_string())?;
-            eprintln!("[ssh_input] Data sent successfully");
-        } else {
-            eprintln!("[ssh_input] Channel is None!");
+        // 先检查连接状态
+        if !session.is_connected.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("Connection is closed".to_string());
+        }
+
+        // 使用带超时的 lock 来避免无限等待，同时确保能获取到锁
+        match tokio::time::timeout(Duration::from_secs(5), session.channel.lock()).await {
+            Ok(mut ch) => {
+                if let Some(ref mut channel) = *ch {
+                    channel.data(data.as_bytes()).await.map_err(|e| {
+                        // 发送失败，标记连接断开
+                        session.is_connected.store(false, std::sync::atomic::Ordering::Relaxed);
+                        e.to_string()
+                    })?;
+                    Ok(())
+                } else {
+                    Err("Channel is closed".to_string())
+                }
+            }
+            Err(_) => {
+                Err("Failed to acquire lock within timeout".to_string())
+            }
         }
     } else {
-        eprintln!("[ssh_input] Session not found! Available sessions: {:?}", map.keys().collect::<Vec<_>>());
+        Err(format!("Session not found: {}", session_id))
     }
-    Ok(())
 }
 
 #[tauri::command]
 pub async fn ssh_resize(manager: tauri::State<'_, SshManager>, session_id: String, cols: u32, rows: u32) -> Result<(), String> {
     let map = manager.0.read().await;
     if let Some(session) = map.get(&session_id) {
+        if !session.is_connected.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("Connection is closed".to_string());
+        }
+
         let mut ch = session.channel.lock().await;
         if let Some(ref mut channel) = *ch {
             channel.window_change(cols, rows, 0, 0).await.map_err(|e| e.to_string())?;
@@ -253,12 +340,16 @@ pub async fn ssh_resize(manager: tauri::State<'_, SshManager>, session_id: Strin
 pub async fn ssh_disconnect(manager: tauri::State<'_, SshManager>, session_id: String) -> Result<(), String> {
     let mut map = manager.0.write().await;
     if let Some(session) = map.remove(&session_id) {
+        // 标记连接已断开
+        session.is_connected.store(false, std::sync::atomic::Ordering::Relaxed);
+
         let mut ch = session.channel.lock().await;
         if let Some(channel) = ch.take() {
             let _ = channel.close().await;
         }
-        // handle disconnects automatically when dropped, or explicit:
-        // let _ = session.handle.disconnect(russh::Disconnect::ByApplication, "", "English").await;
+
+        // 显式断开 SSH 会话
+        let _ = session.handle.disconnect(russh::Disconnect::ByApplication, "User disconnected", "English").await;
     }
     Ok(())
 }
