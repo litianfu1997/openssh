@@ -2,104 +2,96 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概述
+## Project Overview
 
-LynxShell Client 是一个基�?Electron + Vue 3 构建的现代化 SSH 客户端应用程序。核心架构分为三层：
+LynxShell is a modern SSH/SFTP client built with **Tauri v2 + Vue 3 + Rust**. It provides multi-tab terminal sessions, SFTP file management, and supports both password and private key authentication.
 
-1. **主进�?(src/main/)** - 负责 SSH 连接管理、数据存储、IPC 通信
-2. **预加载脚�?(src/preload/)** - 使用 contextBridge 安全地暴�?API 给渲染进�?
-3. **渲染进程 (src/renderer/)** - Vue 3 前端界面
+## Development Commands
 
-## 常用命令
-
-### 开�?
 ```bash
-npm run dev          # 启动开发服务器（支持热重载�?
-npm run build        # 构建生产版本�?out/ 目录
-npm run preview      # 预览构建结果
+# Development (starts Vite dev server + Tauri)
+npm run dev
+
+# Production build
+npm run build
+
+# Vite-only dev server (frontend only)
+npm run vite:dev
+
+# Vite-only build (frontend only)
+npm run vite:build
 ```
 
-### 打包
-```bash
-npm run package      # 打包当前平台应用
-npm run build:win    # 构建 Windows 安装�?(.exe)
-npm run build:mac    # 构建 macOS 应用 (.dmg)
-npm run build:linux  # 构建 Linux AppImage
-npm run build:all    # 打包所有平�?
+**Prerequisites:** Node.js v20+, Rust v1.77+
+
+## Architecture
+
+### Frontend-Backend Communication
+
+The frontend (`src/renderer/`) communicates with the Rust backend (`src-tauri/src/`) through Tauri's `invoke` API. The bridge layer is at `src/renderer/src/api/tauri-bridge.js`, which exports:
+
+- `hostsAPI` — Host CRUD operations
+- `sshAPI` — SSH connect, input, resize, disconnect, event listeners
+- `sftpAPI` — SFTP operations (list, upload, download, delete, rename, mkdir, etc.)
+- `windowAPI` — Window controls (minimize, maximize, close)
+- `dialogAPI` — File open/save dialogs
+- `appAPI` — App version, update checking, terminal history config
+
+### Backend Modules (Rust)
+
+| File | Purpose |
+|------|---------|
+| `lib.rs` | Tauri app entry point, registers all Tauri commands and state managers |
+| `ssh.rs` | SSH session management via `russh` crate, PTY handling, data event emission |
+| `sftp.rs` | SFTP operations via `russh-sftp`, transfer queue with pause/resume/cancel |
+| `db.rs` | Host configuration persistence using `tauri-plugin-store` |
+| `crypto.rs` | AES-GCM encryption for sensitive data (passwords, private keys) |
+
+### State Management
+
+- **SSH:** `SshManager` holds `HashMap<sessionId, SshSession>` with `RwLock` for concurrent access
+- **SFTP:** `SftpManager` holds sessions and transfer states; uses `AtomicU8` for lock-free transfer control
+- **Host Mapping:** `SessionHostMap` tracks which host each SFTP session belongs to
+
+### Frontend Structure
+
+```
+src/renderer/src/
+├── App.vue              # Main app layout, session/tab management
+├── api/tauri-bridge.js  # Tauri API wrapper
+├── components/
+│   ├── TerminalPane.vue # xterm.js terminal wrapper
+│   ├── SftpPane.vue     # SFTP panel (tree + file list)
+│   ├── TabBar.vue       # Tab management
+│   ├── Sidebar.vue      # Host list sidebar
+│   └── ...
+└── locales/             # i18n (en.js, zh.js)
 ```
 
-## 核心架构
+### Session Flow
 
-### SSH 连接管理 (src/main/ssh-manager.js)
+1. User clicks connect → Frontend generates `sessionId` (UUID)
+2. `sshAPI.connect(sessionId, hostId)` → Rust looks up host config, establishes SSH connection
+3. Rust spawns tokio task to listen for channel data, emits `ssh:data` events
+4. Frontend `TerminalPane` listens via `sshAPI.onData()` and writes to xterm.js
+5. User input → `sshAPI.input(sessionId, data)` → Rust sends to channel
 
-- 使用 `ssh2` 库建�?SSH 连接
-- 活跃连接存储�?`Map` 结构中：`sessionId -> { client, stream, sftp }`
-- 支持密码和私钥两种认证方式，私钥支持 passphrase
-- 每个连接通过 sessionId 唯一标识
-- 提供测试连接功能（`testSSHConnection`），连接成功后立即断开
+### SFTP Transfer Control
 
-### 数据存储 (src/main/db.js)
+Transfers use `AtomicU8` states for pause/resume/cancel without deadlocks:
+- `TRANSFER_RUNNING (0)` — Normal operation
+- `TRANSFER_PAUSED (1)` — Pause loop
+- `TRANSFER_CANCELLED (2)` — Abort and cleanup
 
-- 使用 `electron-store` 存储主机配置
-- 数据存储在用户目录的配置文件中（JSON 格式�?
-- 主机数据结构包含：id、host、port、username、auth_type、password/private_key、passphrase、group_name �?
-- 自动追踪最后连接时间（`last_connected`�?
+## Key Dependencies
 
-### IPC 通信模式
+- **russh / russh-keys / russh-sftp** — SSH protocol and SFTP
+- **xterm.js** — Terminal emulator in browser
+- **tauri-plugin-store** — JSON-based persistent storage
+- **vue-i18n** — Internationalization
 
-**单向调用 (渲染进程 �?主进�?**:
-- `ipcRenderer.invoke()` + `ipcMain.handle()` - 异步调用，返回结�?
-- `ipcRenderer.send()` + `ipcMain.on()` - 单向发送，不返回结�?
+## Data Storage
 
-**事件推�?(主进�?�?渲染进程)**:
-- `mainWindow.webContents.send()` + `ipcRenderer.on()` - 主进程主动推�?
-
-所�?API 通过 `contextBridge` 暴露�?`window.electronAPI` 上，按功能分组：
-- `window.electronAPI.hosts.*` - 主机管理
-- `window.electronAPI.ssh.*` - SSH 连接操作
-- `window.electronAPI.sftp.*` - SFTP 文件操作
-- `window.electronAPI.updater.*` - 自动更新
-
-### Vue 组件结构
-
-- **App.vue** - 根组件，管理标签页状态和会话列表
-- **TitleBar.vue** - 自定义无边框标题栏（支持窗口最小化、最大化、关闭）
-- **Sidebar.vue** - 主机列表，支持分组和搜索
-- **TabBar.vue** - 多标签管理，支持右键菜单（复制会话、重命名、关闭其他）
-- **TerminalPane.vue** - 终端面板，基�?xterm.js
-- **HostDialog.vue** - 主机管理对话框（添加/编辑主机�?
-- **SettingsDialog.vue** - 设置对话框（语言、主题、自动更新）
-- **WelcomeScreen.vue** - 欢迎页面
-
-### 国际�?(i18n)
-
-- 使用 `vue-i18n` 实现多语言
-- 语言文件位于 `src/renderer/src/locales/` (zh.js, en.js)
-- 语言偏好存储�?`localStorage` �?
-- 支持运行时切换语言
-
-### 主题系统
-
-- 亮色/暗色主题切换
-- CSS 变量定义�?`src/renderer/src/styles/global.css`
-- 主进程通过 `nativeTheme` 管理，渲染进程同�?
-
-### 自动更新
-
-- 使用 `electron-updater` 实现自动更新
-- 更新源配置在 package.json �?`publish` 字段中（GitHub releases�?
-- 用户可控制是否自动检查更�?
-- 支持手动检查更�?
-
-## 安全考虑
-
-- 渲染进程禁用 `nodeIntegration`，启�?`contextIsolation`
-- 所�?Node.js API 访问通过 preload 脚本安全暴露
-- 主机密码等敏感信息仅在内存中管理，不记录日志
-
-## 构建配置
-
-- 使用 `electron-vite` 作为构建工具
-- 配置文件：`electron.vite.config.js`
-- 渲染进程支持 `@` 别名指向 `src/renderer/src`
-- ASAR 打包时排�?`ssh2` 的原生依赖（通过 `asarUnpack` 配置�?
+- Host configs stored in `hosts.json` via tauri-plugin-store
+- Sensitive fields (password, private_key, passphrase) encrypted with AES-GCM
+- Terminal history cached in localStorage per host
