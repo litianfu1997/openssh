@@ -1,6 +1,6 @@
 {
     "name": "lynxshell",
-    "version": "0.3.6",
+    "version": "0.3.9",
     "description": "A lightweight, clean & modern SSH client built with Tauri v2 + Vue 3 + Rust",
     "main": "out/main/index.js",
     "author": "LynxShell",
