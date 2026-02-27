@@ -136,5 +136,15 @@ export default {
         lines: 'lines',
         close_preview: 'Close Preview',
         image_preview: 'Image Preview'
+    },
+    mobile_keys: {
+        ctrl: 'Ctrl',
+        alt: 'Alt',
+        tab: 'Tab',
+        esc: 'Esc',
+        up: 'Up',
+        down: 'Dn',
+        left: 'Lt',
+        right: 'Rt'
     }
 }

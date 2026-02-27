@@ -136,5 +136,15 @@ export default {
         lines: '行',
         close_preview: '关闭预览',
         image_preview: '图片预览'
+    },
+    mobile_keys: {
+        ctrl: 'Ctrl',
+        alt: 'Alt',
+        tab: 'Tab',
+        esc: 'Esc',
+        up: '上',
+        down: '下',
+        left: '左',
+        right: '右'
     }
 }

@@ -1,17 +1,24 @@
 <template>
   <div class="app-layout">
     <!-- 自定义标题栏 -->
-    <TitleBar @open-settings="showSettingsDialog = true" />
+    <TitleBar @open-settings="showSettingsDialog = true" @toggle-sidebar="mobileSidebarOpen = !mobileSidebarOpen" />
 
     <div class="app-body">
       <!-- 左侧边栏：主机列表 -->
+      <div 
+        class="mobile-sidebar-overlay" 
+        :class="{ show: mobileSidebarOpen }" 
+        @click="mobileSidebarOpen = false"
+      ></div>
       <Sidebar
+        class="adaptive-sidebar"
+        :class="{ 'mobile-open': mobileSidebarOpen }"
         :hosts="hosts"
         :active-session-id="activeSessionId"
         :sessions="sessions"
         :ping-statuses="pingStatuses"
-        @connect="handleConnect"
-        @open-sftp="createSftpTab"
+        @connect="handleConnect; mobileSidebarOpen = false"
+        @open-sftp="createSftpTab; mobileSidebarOpen = false"
         @manage-host="openHostDialog"
         @refresh="loadHosts"
       />
@@ -95,6 +102,7 @@ const sessions = ref([])
 const activeSessionId = ref(null)
 const showHostDialog = ref(false)
 const showSettingsDialog = ref(false)
+const mobileSidebarOpen = ref(false)
 const editingHost = ref(null)
 const pingStatuses = ref({})
 
@@ -262,5 +270,42 @@ onUnmounted(() => {
   flex: 1;
   overflow: hidden;
   position: relative;
+}
+
+.mobile-sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .adaptive-sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    height: 100%;
+  }
+
+  .adaptive-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .mobile-sidebar-overlay {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .mobile-sidebar-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 </style>

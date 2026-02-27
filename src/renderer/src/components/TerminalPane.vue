@@ -79,6 +79,11 @@
         </button>
       </div>
     </Transition>
+
+    <MobileQuickKeys 
+      class="mobile-keys-bar" 
+      @send-input="handleMobileInput" 
+    />
   </div>
 </template>
 
@@ -90,6 +95,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import MobileQuickKeys from './MobileQuickKeys.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -661,6 +667,13 @@ onUnmounted(() => {
   terminal?.dispose()
   sshAPI.disconnect(props.session.id)
 })
+
+function handleMobileInput(data) {
+  if (props.session.status === 'connected') {
+    sshAPI.input(props.session.id, data)
+    terminal?.focus()
+  }
+}
 </script>
 
 <style scoped>
@@ -669,6 +682,16 @@ onUnmounted(() => {
   inset: 0;
   display: flex;
   flex-direction: column;
+}
+
+.mobile-keys-bar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-keys-bar {
+    display: flex;
+  }
 }
 
 .terminal-pane.hidden {

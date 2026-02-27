@@ -1,5 +1,14 @@
 <template>
   <div class="titlebar" @dblclick="maximize">
+    <!-- 移动端侧边栏切换按钮 -->
+    <button class="mobile-menu-btn" @click="$emit('toggle-sidebar')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    
     <!-- 应用图标 + 名称 -->
     <div class="titlebar-left">
       <div class="app-icon">
@@ -110,6 +119,25 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   -webkit-app-region: no-drag;
+}
+
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
 }
 
 .app-icon {

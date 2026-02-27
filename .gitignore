@@ -3,12 +3,7 @@ node_modules/
 
 # ===== Build outputs =====
 dist/
-dist-electron/
-out/
 release/
-
-# ===== Electron Vite cache =====
-.vite/
 
 # ===== Logs =====
 *.log
@@ -33,9 +28,6 @@ desktop.ini
 .env
 .env.local
 .env.*.local
-
-# ===== electron-store data (local user data, not source) =====
-# app data is stored in %APPDATA% / ~/Library, not in project dir
 
 # ===== Temp =====
 *.tmp
