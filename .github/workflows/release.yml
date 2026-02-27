@@ -373,9 +373,26 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: npx tauri android build
 
+      - name: Rename Android artifacts
+        run: |
+          mkdir -p android-artifacts
+          VER="${GITHUB_REF_NAME#v}"
+          
+          # 查找并重命名 APK
+          find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | while read -r file; do
+            filename=$(basename "$file")
+            # 重命名为 LynxShell_版本_原文件名
+            cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
+          done
+          
+          # 查找并重命名 AAB
+          find src-tauri/gen/android/app/build/outputs/bundle -name "*.aab" | while read -r file; do
+            filename=$(basename "$file")
+            cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
+          done
+
       - name: Upload Android artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+            android-artifacts/*
