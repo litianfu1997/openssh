@@ -12,18 +12,12 @@ pub struct EncryptedData {
     pub auth_tag: String,
 }
 
-pub fn get_encryption_key(app: &tauri::AppHandle) -> [u8; 32] {
+pub fn get_encryption_key(app: &tauri::AppHandle) -> Option<[u8; 32]> {
     let store_path = PathBuf::from("encryption.json");
     let store_result = app.store(store_path.clone());
-    
+
     // In Tauri 2.0 with plugin-store, we get result
-    let store = match store_result {
-        Ok(s) => s,
-        Err(_) => {
-            // fallback, should not happen if plugin initialized
-            return [0u8; 32];
-        }
-    };
+    let store = store_result.ok()?;
 
     if let Some(key_val) = store.get("encryptionKey") {
         if let Some(key_hex) = key_val.as_str() {
@@ -31,7 +25,7 @@ pub fn get_encryption_key(app: &tauri::AppHandle) -> [u8; 32] {
                 if key_bytes.len() == 32 {
                     let mut arr = [0u8; 32];
                     arr.copy_from_slice(&key_bytes);
-                    return arr;
+                    return Some(arr);
                 }
             }
         }
@@ -41,19 +35,19 @@ pub fn get_encryption_key(app: &tauri::AppHandle) -> [u8; 32] {
     let mut key = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut key);
     let key_hex = hex::encode(key);
-    
+
     store.set("encryptionKey", serde_json::json!(key_hex));
     let _ = store.save(); // ignore error
-    
-    key
+
+    Some(key)
 }
 
 pub fn encrypt(app: &tauri::AppHandle, plaintext: &str) -> Option<EncryptedData> {
     if plaintext.is_empty() {
         return None;
     }
-    
-    let key_bytes = get_encryption_key(app);
+
+    let key_bytes = get_encryption_key(app)?;
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
     
@@ -89,7 +83,7 @@ pub fn encrypt(app: &tauri::AppHandle, plaintext: &str) -> Option<EncryptedData>
 }
 
 pub fn decrypt(app: &tauri::AppHandle, data: &EncryptedData) -> Option<String> {
-    let key_bytes = get_encryption_key(app);
+    let key_bytes = get_encryption_key(app)?;
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
     

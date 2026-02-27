@@ -65,6 +65,7 @@ export const sshAPI = {
 // === SFTP 操作 ===
 export const sftpAPI = {
   connect: (sessionId, hostId) => invoke('sftp_connect_session', { sessionId, hostId }),
+  disconnect: (sessionId) => invoke('sftp_disconnect', { sessionId }),
   realpath: (sessionId, path) => invoke('sftp_realpath', { sessionId, path }),
   list: (sessionId, path) => invoke('sftp_list', { sessionId, path }),
   // ls 是 list 的别名，保持与 Electron API 兼容

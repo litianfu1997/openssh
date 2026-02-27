@@ -176,7 +176,7 @@ pub async fn save_host(app: tauri::AppHandle, host: DecryptedHostConfig) -> Resu
 pub async fn delete_host(app: tauri::AppHandle, id: String) -> Result<bool, String> {
     let store_path = PathBuf::from("hosts.json");
     let store = app.store(store_path).map_err(|e| e.to_string())?;
-    
+
     let mut hosts: Vec<HostConfig> = store
         .get("hosts")
         .and_then(|v| serde_json::from_value(v).ok())
@@ -188,9 +188,10 @@ pub async fn delete_host(app: tauri::AppHandle, id: String) -> Result<bool, Stri
     if hosts.len() < initial_len {
         store.set("hosts", serde_json::to_value(&hosts).map_err(|e| e.to_string())?);
         let _ = store.save();
+        Ok(true) // 删除成功
+    } else {
+        Ok(false) // 没有找到要删除的主机
     }
-
-    Ok(true)
 }
 
 #[tauri::command]

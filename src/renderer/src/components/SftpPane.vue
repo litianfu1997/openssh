@@ -1,5 +1,5 @@
 <script setup>
-import { sftpAPI, dialogAPI, sshAPI } from '@/api/tauri-bridge'
+import { sftpAPI, dialogAPI } from '@/api/tauri-bridge'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SftpToolbar from './SftpToolbar.vue'
@@ -374,7 +374,7 @@ const loadInitialData = async () => {
   if (props.session.status !== 'connected') {
     try {
       props.session.status = 'connecting'
-      await sshAPI.connect(props.session.id, props.session.hostId)
+      // SFTP 在 Rust 端有自己的 SSH 连接，只需调用 sftpAPI.connect
       await sftpAPI.connect(props.session.id, props.session.hostId)
       props.session.status = 'connected'
     } catch (e) {
@@ -446,7 +446,8 @@ onUnmounted(() => {
   // 调用 Tauri 返回的取消订阅函数
   unlistenUploadProgress?.()
   unlistenDownloadProgress?.()
-  sshAPI.disconnect(props.session.id)
+  // SFTP 会话使用 sftpAPI.disconnect 断开
+  sftpAPI.disconnect(props.session.id)
 })
 </script>
 

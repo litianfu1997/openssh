@@ -442,6 +442,13 @@ async function loadServerHistory() {
     mergeServerHistory(allCmds)
     console.log('[autocomplete] Loaded', cmdHistory.value.length, 'server history items')
   }
+
+  // 断开 SFTP 连接，避免连接泄漏
+  try {
+    await sftpAPI.disconnect(sftpSessionId)
+  } catch(e) {
+    console.warn('[autocomplete] SFTP disconnect failed:', e)
+  }
 }
 
 // 解析不同 shell 的历史文件格式

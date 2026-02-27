@@ -356,7 +356,18 @@ pub async fn sftp_delete(
 ) -> Result<bool, String> {
     let (sftp_arc, _) = sftp_get_host(&app, &host_map, &mgr, &session_id).await?;
     let sftp = sftp_arc.lock().await;
-    sftp.remove_file(&path).await.map_err(|e| e.to_string())?;
+
+    // 先检查是否是目录
+    let metadata = sftp.metadata(&path).await.map_err(|e| e.to_string())?;
+
+    if metadata.is_dir() {
+        // 目录使用 remove_dir
+        sftp.remove_dir(&path).await.map_err(|e| e.to_string())?;
+    } else {
+        // 文件使用 remove_file
+        sftp.remove_file(&path).await.map_err(|e| e.to_string())?;
+    }
+
     Ok(true)
 }
 
@@ -577,6 +588,25 @@ pub async fn sftp_cancel(
     if let Some(state) = transfers.get(&transfer_id) {
         state.store(TRANSFER_CANCELLED, Ordering::Relaxed);
     }
+    Ok(())
+}
+
+/// 断开 SFTP 会话
+#[tauri::command]
+pub async fn sftp_disconnect(
+    host_map: tauri::State<'_, SessionHostMap>,
+    mgr: tauri::State<'_, SftpManager>,
+    session_id: String,
+) -> Result<(), String> {
+    // 从 host_map 中移除
+    host_map.0.write().await.remove(&session_id);
+
+    // 从 sessions 中移除
+    mgr.sessions.write().await.remove(&session_id);
+
+    // 从 handles 中移除（SSH 连接会自动断开）
+    mgr.handles.write().await.remove(&session_id);
+
     Ok(())
 }
 

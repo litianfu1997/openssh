@@ -41,7 +41,8 @@ pub fn run() {
         sftp::sftp_cancel,
         sftp::sftp_move,
         sftp::sftp_stat,
-        sftp::sftp_read_text_file
+        sftp::sftp_read_text_file,
+        sftp::sftp_disconnect
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

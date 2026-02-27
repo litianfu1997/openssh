@@ -72,7 +72,7 @@
 </template>
 
 <script setup>
-import { sshAPI, hostsAPI } from '@/api/tauri-bridge'
+import { sshAPI, hostsAPI, sftpAPI } from '@/api/tauri-bridge'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import TitleBar from './components/TitleBar.vue'
@@ -177,7 +177,15 @@ async function handleOpenSftpCwd(session) {
 }
 
 function closeSession(sessionId) {
-  sshAPI.disconnect(sessionId)
+  const session = sessions.value.find(s => s.id === sessionId)
+  if (session) {
+    // 根据会话类型调用对应的断开方法
+    if (session.type === TAB_TYPES.SFTP) {
+      sftpAPI.disconnect(sessionId)
+    } else {
+      sshAPI.disconnect(sessionId)
+    }
+  }
   const idx = sessions.value.findIndex(s => s.id === sessionId)
   if (idx > -1) {
     sessions.value.splice(idx, 1)
@@ -192,6 +200,7 @@ function duplicateSession(session) {
   const sessionId = uuidv4()
   sessions.value.push({
     id: sessionId,
+    type: session.type || TAB_TYPES.TERMINAL,
     hostId: session.hostId,
     hostName: session.hostName,
     host: session.host,

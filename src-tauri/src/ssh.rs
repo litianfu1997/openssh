@@ -332,8 +332,10 @@ pub async fn ssh_resize(manager: tauri::State<'_, SshManager>, session_id: Strin
         if let Some(ref mut channel) = *ch {
             channel.window_change(cols, rows, 0, 0).await.map_err(|e| e.to_string())?;
         }
+        Ok(())
+    } else {
+        Err(format!("Session not found: {}", session_id))
     }
-    Ok(())
 }
 
 #[tauri::command]
