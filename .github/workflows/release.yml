@@ -184,7 +184,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: npx tauri
           args: --target aarch64-apple-darwin
 
       - name: Upload macOS (aarch64) artifacts
@@ -243,7 +242,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: npx tauri
           args: --target x86_64-apple-darwin
 
       - name: Upload macOS (x64) artifacts
@@ -304,8 +302,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: npx tauri
 
       - name: Upload Linux artifacts
         uses: softprops/action-gh-release@v2
@@ -358,7 +354,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: npx tauri
           args: android build
 
       - name: Upload Android artifacts
@@ -405,7 +400,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: npx tauri
           args: ios build
 
       - name: Upload iOS artifacts (Unsigned APP)
