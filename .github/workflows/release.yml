@@ -341,7 +341,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -368,28 +368,107 @@ jobs:
       - name: Initialize Tauri Android project
         run: npx tauri android init
 
-      - name: Build Tauri App (Android APK)
+      - name: Detect Android signing config
+        id: android_signing
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && \
+             [ -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] && \
+             [ -n "${{ secrets.ANDROID_KEY_ALIAS }}" ] && \
+             [ -n "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "has_signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare Android keystore
+        if: steps.android_signing.outputs.has_signing == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-signing"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-signing/release.keystore"
+
+      - name: Inject Android release signing
+        if: steps.android_signing.outputs.has_signing == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src-tauri/gen/android/app/build.gradle.kts")
+          text = path.read_text(encoding="utf-8")
+
+          marker = "    buildTypes {\n"
+          signing_block = """    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("RUNNER_TEMP") + "/android-signing/release.keystore")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+"""
+
+          if "signingConfigs {" not in text:
+              text = text.replace(marker, signing_block + marker, 1)
+
+          release_old = """        getByName("release") {
+            isMinifyEnabled = true
+            proguardFiles(
+                *fileTree(".") { include("**/*.pro") }
+                    .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
+                    .toList().toTypedArray()
+            )
+        }
+"""
+          release_new = """        getByName("release") {
+            isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
+            proguardFiles(
+                *fileTree(".") { include("**/*.pro") }
+                    .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
+                    .toList().toTypedArray()
+            )
+        }
+"""
+          text = text.replace(release_old, release_new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Build installable Android APK
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-        run: npx tauri android build
+        shell: bash
+        run: |
+          if [ "${{ steps.android_signing.outputs.has_signing }}" = "true" ]; then
+            npx tauri android build
+          else
+            npx tauri android build --debug
+          fi
 
       - name: Rename Android artifacts
+        shell: bash
         run: |
           mkdir -p android-artifacts
           VER="${GITHUB_REF_NAME#v}"
-          
-          # 查找并重命名 APK
-          find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | while read -r file; do
-            filename=$(basename "$file")
-            # 重命名为 LynxShell_版本_原文件名
-            cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
-          done
-          
-          # 查找并重命名 AAB
-          find src-tauri/gen/android/app/build/outputs/bundle -name "*.aab" | while read -r file; do
-            filename=$(basename "$file")
-            cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
-          done
+
+          if [ "${{ steps.android_signing.outputs.has_signing }}" = "true" ]; then
+            find src-tauri/gen/android/app/build/outputs/apk/release -name "*release*.apk" ! -name "*unsigned*" | while read -r file; do
+              filename=$(basename "$file")
+              cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
+            done
+          else
+            find src-tauri/gen/android/app/build/outputs/apk/debug \( -name "*arm64-v8a*debug*.apk" -o -name "*armeabi-v7a*debug*.apk" -o -name "*universal*debug*.apk" \) | while read -r file; do
+              filename=$(basename "$file")
+              cp "$file" "android-artifacts/LynxShell_${VER}_${filename}"
+            done
+          fi
 
       - name: Upload Android artifacts
         uses: softprops/action-gh-release@v2
