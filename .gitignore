@@ -37,11 +37,5 @@ out/*
 
 # ===== Local tooling artifacts =====
 .claude/
-src-tauri/gen/*
-!src-tauri/gen/android/
-src-tauri/gen/android/*
-!src-tauri/gen/android/gradle.properties
-!src-tauri/gen/android/app/
-src-tauri/gen/android/app/*
-!src-tauri/gen/android/app/build.gradle.kts
+src-tauri/gen/
 nul
