@@ -422,7 +422,7 @@ jobs:
           const fs = require("fs");
           const path = "src-tauri/gen/android/app/build.gradle.kts";
           let text = fs.readFileSync(path, "utf8");
-          const marker = "    buildTypes {\n";
+          const nl = text.includes("\r\n") ? "\r\n" : "\n";
           const signingBlock = [
             "    signingConfigs {",
             "        create(\"release\") {",
@@ -433,34 +433,16 @@ jobs:
             "        }",
             "    }",
             ""
-          ].join("\n");
+          ].join(nl);
           if (!text.includes("signingConfigs {")) {
-            text = text.replace(marker, signingBlock + marker);
+            text = text.replace(/(\r?\n)(\s+buildTypes\s*\{)/, `$1${signingBlock}$2`);
           }
-          const releaseOld = [
-            "        getByName(\"release\") {",
-            "            isMinifyEnabled = true",
-            "            proguardFiles(",
-            "                *fileTree(\".\") { include(\"**/*.pro\") }",
-            "                    .plus(getDefaultProguardFile(\"proguard-android-optimize.txt\"))",
-            "                    .toList().toTypedArray()",
-            "            )",
-            "        }",
-            ""
-          ].join("\n");
-          const releaseNew = [
-            "        getByName(\"release\") {",
-            "            isMinifyEnabled = true",
-            "            signingConfig = signingConfigs.getByName(\"release\")",
-            "            proguardFiles(",
-            "                *fileTree(\".\") { include(\"**/*.pro\") }",
-            "                    .plus(getDefaultProguardFile(\"proguard-android-optimize.txt\"))",
-            "                    .toList().toTypedArray()",
-            "            )",
-            "        }",
-            ""
-          ].join("\n");
-          text = text.replace(releaseOld, releaseNew);
+          if (!text.includes("signingConfig = signingConfigs.getByName(\"release\")")) {
+            text = text.replace(
+              /(getByName\("release"\)\s*\{\s*isMinifyEnabled = true)/,
+              `$1${nl}            signingConfig = signingConfigs.getByName("release")`
+            );
+          }
           fs.writeFileSync(path, text);
           EOF
           node "$RUNNER_TEMP/inject-android-signing.js"
