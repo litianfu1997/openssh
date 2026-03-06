@@ -2,7 +2,7 @@
 import { sftpAPI } from '@/api/tauri-bridge'
 import { ref, watch, computed } from 'vue'
 import FileIcon from './FileIcon.vue'
-import MonacoEditor from './MonacoEditor.vue'
+import EditorComponent from '@editor-component'
 
 const props = defineProps({
   file: { type: Object, required: true },
@@ -142,7 +142,7 @@ watch(() => props.file, loadFile, { immediate: true })
         </svg>
         <span>{{ error }}</span>
       </div>
-      <MonacoEditor
+      <EditorComponent
         v-else
         v-model="content"
         :language="language"

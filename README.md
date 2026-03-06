@@ -113,6 +113,12 @@ npm run dev
 npm run build
 ```
 
+#### Android APK (arm64)
+
+```bash
+npm run android:build:apk
+```
+
 ---
 
 ### 📂 Project Structure
@@ -229,6 +235,10 @@ npm run dev
 
 ```bash
 npm run build
+```
+
+```bash
+npm run android:build:apk
 ```
 
 ---
