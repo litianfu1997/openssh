@@ -331,17 +331,22 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
-        run: sdkmanager --install "ndk;27.0.12077973"
+        shell: bash
+        run: |
+          if [ ! -d "${ANDROID_HOME}/ndk/27.0.12077973" ]; then
+            sdkmanager --install "ndk;27.0.12077973"
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi
+          targets: aarch64-linux-android
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
