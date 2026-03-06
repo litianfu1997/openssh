@@ -417,7 +417,53 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: node -e 'const fs=require("fs");const path="src-tauri/gen/android/app/build.gradle.kts";let text=fs.readFileSync(path,"utf8");const marker="    buildTypes {\\n";const signingBlock=["    signingConfigs {","        create(\\"release\\") {","            storeFile = file(System.getenv(\\"RUNNER_TEMP\\") + \\"/android-signing/release.keystore\\")","            storePassword = System.getenv(\\"ANDROID_KEYSTORE_PASSWORD\\")","            keyAlias = System.getenv(\\"ANDROID_KEY_ALIAS\\")","            keyPassword = System.getenv(\\"ANDROID_KEY_PASSWORD\\")","        }","    }",""].join("\\n");if(!text.includes("signingConfigs {")){text=text.replace(marker,signingBlock+marker);}const releaseOld=["        getByName(\\"release\\") {","            isMinifyEnabled = true","            proguardFiles(","                *fileTree(\\".\\") { include(\\"**/*.pro\\") }","                    .plus(getDefaultProguardFile(\\"proguard-android-optimize.txt\\"))","                    .toList().toTypedArray()","            )","        }",""].join("\\n");const releaseNew=["        getByName(\\"release\\") {","            isMinifyEnabled = true","            signingConfig = signingConfigs.getByName(\\"release\\")","            proguardFiles(","                *fileTree(\\".\\") { include(\\"**/*.pro\\") }","                    .plus(getDefaultProguardFile(\\"proguard-android-optimize.txt\\"))","                    .toList().toTypedArray()","            )","        }",""].join("\\n");text=text.replace(releaseOld,releaseNew);fs.writeFileSync(path,text);'
+        run: |
+          cat > "$RUNNER_TEMP/inject-android-signing.js" <<'EOF'
+          const fs = require("fs");
+          const path = "src-tauri/gen/android/app/build.gradle.kts";
+          let text = fs.readFileSync(path, "utf8");
+          const marker = "    buildTypes {\n";
+          const signingBlock = [
+            "    signingConfigs {",
+            "        create(\"release\") {",
+            "            storeFile = file(System.getenv(\"RUNNER_TEMP\") + \"/android-signing/release.keystore\")",
+            "            storePassword = System.getenv(\"ANDROID_KEYSTORE_PASSWORD\")",
+            "            keyAlias = System.getenv(\"ANDROID_KEY_ALIAS\")",
+            "            keyPassword = System.getenv(\"ANDROID_KEY_PASSWORD\")",
+            "        }",
+            "    }",
+            ""
+          ].join("\n");
+          if (!text.includes("signingConfigs {")) {
+            text = text.replace(marker, signingBlock + marker);
+          }
+          const releaseOld = [
+            "        getByName(\"release\") {",
+            "            isMinifyEnabled = true",
+            "            proguardFiles(",
+            "                *fileTree(\".\") { include(\"**/*.pro\") }",
+            "                    .plus(getDefaultProguardFile(\"proguard-android-optimize.txt\"))",
+            "                    .toList().toTypedArray()",
+            "            )",
+            "        }",
+            ""
+          ].join("\n");
+          const releaseNew = [
+            "        getByName(\"release\") {",
+            "            isMinifyEnabled = true",
+            "            signingConfig = signingConfigs.getByName(\"release\")",
+            "            proguardFiles(",
+            "                *fileTree(\".\") { include(\"**/*.pro\") }",
+            "                    .plus(getDefaultProguardFile(\"proguard-android-optimize.txt\"))",
+            "                    .toList().toTypedArray()",
+            "            )",
+            "        }",
+            ""
+          ].join("\n");
+          text = text.replace(releaseOld, releaseNew);
+          fs.writeFileSync(path, text);
+          EOF
+          node "$RUNNER_TEMP/inject-android-signing.js"
 
       - name: Build installable Android APK
         env:
