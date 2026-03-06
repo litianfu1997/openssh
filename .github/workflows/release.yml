@@ -380,7 +380,7 @@ jobs:
           npm version $VER --no-git-tag-version --allow-same-version
 
       - name: Initialize Tauri Android project
-        run: npx tauri android init
+        run: npx tauri android init --ci
 
       - name: Detect Android signing config
         id: android_signing
@@ -450,8 +450,10 @@ jobs:
       - name: Build installable Android APK
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+          VITE_TARGET_PLATFORM: android
         shell: bash
-        run: npx tauri android build
+        run: npx tauri android build --apk --target aarch64 --ci
 
       - name: Rename Android artifacts
         shell: bash
