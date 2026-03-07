@@ -415,6 +415,24 @@ jobs:
           mkdir -p "$RUNNER_TEMP/android-signing"
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/android-signing/release.keystore"
 
+      - name: Validate Android keystore and alias
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/android-signing/release.keystore"
+
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            echo "Keystore file not found at $KEYSTORE_PATH"
+            exit 1
+          fi
+
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" > /dev/null
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" > /dev/null
+          echo "Keystore and alias validation passed."
+
       - name: Inject Android release signing
         shell: bash
         env:
@@ -457,8 +475,37 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
           VITE_TARGET_PLATFORM: android
+          TAURI_CLI_VERBOSITY: "2"
+          RUST_BACKTRACE: "1"
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
-        run: npx tauri android build --apk --target aarch64 --ci
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/android-build.log"
+          : > "$LOG_FILE"
+          echo "Start Android release build diagnostics" | tee -a "$LOG_FILE"
+
+          if npx tauri android build --apk --target aarch64 --ci 2>&1 | tee -a "$LOG_FILE"; then
+            echo "Tauri Android build succeeded." | tee -a "$LOG_FILE"
+          else
+            echo "Tauri Android build failed. Running Gradle fallback diagnostics..." | tee -a "$LOG_FILE"
+            src-tauri/gen/android/gradlew --project-dir src-tauri/gen/android :app:assembleRelease --stacktrace --info --no-daemon --warning-mode all 2>&1 | tee -a "$LOG_FILE" || true
+            exit 1
+          fi
+
+      - name: Upload Android build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-diagnostics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/android-build.log
+            src-tauri/gen/android/build/reports/problems/problems-report.html
+            src-tauri/gen/android/**/build/reports/**
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Rename Android artifacts
         shell: bash
