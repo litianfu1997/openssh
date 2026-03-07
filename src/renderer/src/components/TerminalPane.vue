@@ -81,8 +81,11 @@
     </Transition>
 
     <MobileQuickKeys 
+      ref="mobileKeysRef"
       class="mobile-keys-bar" 
       @send-input="handleMobileInput" 
+      @focus-terminal="focusMobileTerminal"
+      @blur-terminal="blurMobileTerminal"
     />
   </div>
 </template>
@@ -103,6 +106,7 @@ const props = defineProps({
 })
 
 const termRef = ref(null)
+const mobileKeysRef = ref(null)
 let terminal = null
 let fitAddon = null
 let resizeObserver = null
@@ -111,6 +115,7 @@ let unlistenClosed = null // Tauri 事件取消订阅函数
 let themeObserver = null
 let clickHandler = null
 let settingsHandler = null
+let fontSizeHandler = null
 
 // 右键菜单状态
 const ctxMenu = ref({ show: false, x: 0, y: 0 })
@@ -215,11 +220,12 @@ const lightTheme = {
 
 function createTerminal() {
   const isLight = document.documentElement.classList.contains('light-mode')
+  const savedFontSize = parseInt(localStorage.getItem('terminalFontSize')) || 13
 
   terminal = new Terminal({
     theme: isLight ? lightTheme : darkTheme,
     fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace",
-    fontSize: 13,
+    fontSize: savedFontSize,
     lineHeight: 1.5,
     letterSpacing: 0.5,
     cursorBlink: true,
@@ -286,6 +292,45 @@ function createTerminal() {
 
   // 用户输入拦截与补全计算
   terminal.onData((data) => {
+    // 检查移动端修饰键
+    if (mobileKeysRef.value) {
+      const mods = mobileKeysRef.value.getActiveModifiers()
+      let modified = false
+      if (mods.ctrl && data.length === 1) {
+        const charCode = data.charCodeAt(0)
+        let ctrlCode = 0
+        if (charCode >= 97 && charCode <= 122) { // a-z
+          ctrlCode = charCode - 96
+        } else if (charCode >= 65 && charCode <= 90) { // A-Z
+          ctrlCode = charCode - 64
+        } else if (data === '[') {
+          ctrlCode = 27
+        } else if (data === '\\') {
+          ctrlCode = 28
+        } else if (data === ']') {
+          ctrlCode = 29
+        } else if (data === '^') {
+          ctrlCode = 30
+        } else if (data === '_') {
+          ctrlCode = 31
+        }
+        if (ctrlCode > 0) {
+          data = String.fromCharCode(ctrlCode)
+          modified = true
+        }
+      }
+      if (mods.alt) {
+        data = '\x1b' + data
+        modified = true
+      }
+      if (modified) {
+        mobileKeysRef.value.resetModifiers()
+      } else if (mods.ctrl) {
+        // 如果按下了 ctrl 但输入的不是普通字符（比如回车或退格等），也重置掉 ctrl 状态
+        mobileKeysRef.value.resetModifiers()
+      }
+    }
+
     // 如果处于 alternate buffer（通常是 vim, htop 等 TUI 程序），禁用补全逻辑
     if (terminal?.buffer.active.type === 'alternate') {
       localBuffer.value = ''
@@ -532,7 +577,17 @@ onMounted(async () => {
       suggestions.value = []
     }
   }
+  fontSizeHandler = (e) => {
+    if (terminal) {
+      terminal.options.fontSize = e.detail.size
+      requestAnimationFrame(() => {
+        fitAddon?.fit()
+        terminal.focus()
+      })
+    }
+  }
   window.addEventListener('terminal-history-settings-changed', settingsHandler)
+  window.addEventListener('terminal-font-size-changed', fontSizeHandler)
 
   createTerminal()
   terminal?.focus()
@@ -658,6 +713,7 @@ onUnmounted(() => {
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
   window.removeEventListener('terminal-history-settings-changed', settingsHandler)
+  window.removeEventListener('terminal-font-size-changed', fontSizeHandler)
   if (termRef.value && clickHandler) {
     termRef.value.removeEventListener('click', clickHandler)
   }
@@ -671,8 +727,15 @@ onUnmounted(() => {
 function handleMobileInput(data) {
   if (props.session.status === 'connected') {
     sshAPI.input(props.session.id, data)
-    terminal?.focus()
   }
+}
+
+function focusMobileTerminal() {
+  terminal?.focus()
+}
+
+function blurMobileTerminal() {
+  terminal?.blur()
 }
 </script>
 
@@ -683,10 +746,13 @@ function handleMobileInput(data) {
   display: flex;
   flex-direction: column;
   will-change: opacity, z-index;
+  background: var(--color-bg);
 }
 
 .mobile-keys-bar {
   display: none;
+  flex-shrink: 0;
+  z-index: 20;
 }
 
 @media (max-width: 768px) {

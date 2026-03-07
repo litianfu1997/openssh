@@ -41,6 +41,18 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
+
+            <div class="setting-item">
+              <div class="setting-content">
+                <div class="setting-title">{{ $t('settings.terminal_font_size') }}</div>
+                <div class="setting-desc">{{ $t('settings.terminal_font_size_desc').replace('{size}', terminalFontSize) }}</div>
+              </div>
+              <div class="font-size-control">
+                <button class="font-size-btn" @click="changeTerminalFontSize(-1)" :disabled="terminalFontSize <= 8">-</button>
+                <div class="font-size-value">{{ terminalFontSize }}</div>
+                <button class="font-size-btn" @click="changeTerminalFontSize(1)" :disabled="terminalFontSize >= 36">+</button>
+              </div>
+            </div>
           </div>
 
           <Transition name="slide-fade">
@@ -101,6 +113,7 @@ const emit = defineEmits(['update:visible'])
 const appVersion = ref('0.0.0')
 const autoUpdateEnabled = ref(true)
 const terminalHistoryEnabled = ref(true)
+const terminalFontSize = ref(13)
 const checking = ref(false)
 const updateStatus = ref('')
 const updateMessage = ref('')
@@ -115,6 +128,7 @@ async function loadConfig() {
     appVersion.value = await appAPI.getVersion()
     autoUpdateEnabled.value = localStorage.getItem(AUTO_UPDATE_KEY) !== 'false'
     terminalHistoryEnabled.value = await appAPI.getTerminalHistoryConfig()
+    terminalFontSize.value = parseInt(localStorage.getItem('terminalFontSize')) || 13
   } catch (e) {
     console.error('Failed to load settings', e)
   }
@@ -132,6 +146,17 @@ async function toggleTerminalHistory() {
     }))
   } catch (e) {
     console.error('Failed to save terminal history settings', e)
+  }
+}
+
+function changeTerminalFontSize(delta) {
+  const newSize = terminalFontSize.value + delta
+  if (newSize >= 8 && newSize <= 36) {
+    terminalFontSize.value = newSize
+    localStorage.setItem('terminalFontSize', String(newSize))
+    window.dispatchEvent(new CustomEvent('terminal-font-size-changed', {
+      detail: { size: newSize }
+    }))
   }
 }
 
@@ -330,6 +355,48 @@ onMounted(() => {
   font-size: 13px;
   color: var(--color-text-3);
   line-height: 1.4;
+}
+
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-bg-3);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light);
+}
+
+.font-size-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.font-size-btn:hover:not(:disabled) {
+  background: var(--color-bg-4);
+}
+
+.font-size-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.font-size-value {
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  min-width: 20px;
+  text-align: center;
 }
 
 .toggle-switch {

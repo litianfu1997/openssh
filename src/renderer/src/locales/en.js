@@ -76,6 +76,8 @@ export default {
         auto_update_desc: 'Download updates in background automatically',
         terminal_history: 'Terminal History Suggestions',
         terminal_history_desc: 'Show command history suggestions while typing (Shell only)',
+        terminal_font_size: 'Terminal Font Size',
+        terminal_font_size_desc: 'Adjust the font size of the terminal ({size}px)',
         check_update: 'Check for Updates',
         checking: 'Checking for updates',
         install_now: 'Restart & Install',
@@ -145,6 +147,16 @@ export default {
         up: 'Up',
         down: 'Dn',
         left: 'Lt',
-        right: 'Rt'
+        right: 'Rt',
+        tab_system: 'System',
+        tab_quick: 'Quick',
+        tab_pc: 'PC Keys',
+        add_custom: 'Add Custom Key',
+        edit_custom: 'Edit Custom Key',
+        custom_name: 'Key Name',
+        custom_name_placeholder: 'e.g., ll',
+        custom_cmd: 'Command',
+        custom_cmd_placeholder: 'e.g., ls -al\\n',
+        custom_delete_confirm: 'Are you sure you want to delete this custom key?'
     }
 }

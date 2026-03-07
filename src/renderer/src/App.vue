@@ -246,6 +246,23 @@ onMounted(async () => {
   const p = await platform()
   isMobilePlatform.value = p === 'android' || p === 'ios'
   loadHosts()
+
+  if (isMobilePlatform.value) {
+    // 监听窗口大小变化以计算移动端软键盘高度
+    // 初始记录完整高度
+    const initialHeight = window.innerHeight
+    window.addEventListener('resize', () => {
+      const currentHeight = window.innerHeight
+      if (currentHeight < initialHeight) {
+        // 键盘弹起
+        const keyboardHeight = initialHeight - currentHeight
+        document.documentElement.style.setProperty('--keyboard-inset', `${keyboardHeight}px`)
+      } else {
+        // 键盘收起
+        document.documentElement.style.setProperty('--keyboard-inset', '0px')
+      }
+    })
+  }
 })
 
 onUnmounted(() => {

@@ -76,6 +76,8 @@ export default {
         auto_update_desc: '有新版本时自动下载并通知我',
         terminal_history: '终端输入提示',
         terminal_history_desc: '输入命令时显示历史记录补全（仅在 Shell 环境下有效）',
+        terminal_font_size: '终端字体大小',
+        terminal_font_size_desc: '调整终端内显示的字体大小（{size}px）',
         check_update: '检查更新',
         checking: '正在检查更新',
         install_now: '立即重启并更新',
@@ -145,6 +147,16 @@ export default {
         up: '上',
         down: '下',
         left: '左',
-        right: '右'
+        right: '右',
+        tab_system: '系统',
+        tab_quick: '快捷',
+        tab_pc: '电脑',
+        add_custom: '添加快捷按钮',
+        edit_custom: '编辑快捷按钮',
+        custom_name: '按钮名称',
+        custom_name_placeholder: '例如: ll',
+        custom_cmd: '执行命令',
+        custom_cmd_placeholder: '例如: ls -al\\n',
+        custom_delete_confirm: '确定要删除这个自定义按钮吗？'
     }
 }

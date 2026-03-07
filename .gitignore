@@ -39,3 +39,5 @@ out/*
 .claude/
 src-tauri/gen/
 nul
+keystore.base64.txt
+lynxshell-release.keystore
